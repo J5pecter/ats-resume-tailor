@@ -70,6 +70,9 @@ skills carried evidence still parse.
   and both are compliance. Rejecting one buys a retry on strong models and
   outright failure on weak ones. Tolerance is about shape only; every rule that
   matters is enforced after parsing.
+- A metered provider (currently only `anthropic`) throws at startup unless
+  `ALLOW_PAID_PROVIDERS=true`. This build is required to cost nothing, and the
+  failure worth preventing is silent spend after an absent-minded env change.
 - Every data route checks session AND row ownership via `lib/ownership.ts`.
 - Never log resume or JD content. `LlmCall` stores counts and timings only.
 

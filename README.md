@@ -184,6 +184,40 @@ include the three generative steps.
 
 ---
 
+## Cost
+
+This runs at zero cost, and the repo is set up so it stays that way.
+
+| Component | Cost | Why it cannot bill you |
+|---|---|---|
+| Inference | £0 | Groq free tier. No card, no payment method, no plan to downgrade from |
+| Database | £0 | SQLite, a file on your disk |
+| Auth | £0 | Self-hosted NextAuth. Google sign-in is optional and free |
+| Source hosting | £0 | Public GitHub repo |
+| Fonts, assets | £0 | Arial and Helvetica ship with the OS and the PDF format — nothing is fetched |
+
+The only component that *can* cost money is inference, so there is a guard in
+code rather than just a note in a README. `LLM_PROVIDER=anthropic` bills per
+token with no free allowance, so selecting it throws at startup unless
+`ALLOW_PAID_PROVIDERS=true` is also set. The failure that prevents is a quiet
+one: paste a key while debugging, forget to change it back, find out a month
+later. Everything this app needs is available free, so spending should be a
+decision rather than an oversight.
+
+Two further backstops: generations are rate-limited to 20 per user per hour
+(`RATE_LIMIT_GENERATIONS_PER_HOUR`), and job-description and resume parses are
+cached on a content hash, so re-running a generation does not re-parse
+unchanged inputs.
+
+**What cannot be promised.** Free tiers are the provider's to change, and this
+one already moved once during development — Cerebras was widely documented as
+having a generous free tier and turned out to require funding. So "free
+forever" is not something the repo can guarantee. What it can guarantee is
+that nothing here bills you *silently*: there is no card on file anywhere, no
+paid key configured, and the one paid path refuses to run without explicit
+consent. If Groq ever ends its free tier, the app stops working and tells you
+why — it does not quietly start charging.
+
 ## Privacy
 
 Resume content is sensitive personal data, and this build treats it that way:

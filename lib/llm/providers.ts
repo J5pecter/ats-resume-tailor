@@ -67,12 +67,42 @@ export class LlmTruncatedError extends Error {
   }
 }
 
+/**
+ * Providers that bill per token with no free allowance. Selecting one is a
+ * legitimate choice, but it should never happen by accident.
+ */
+const PAID_PROVIDERS: ProviderName[] = ["anthropic"];
+
+/**
+ * Refuses to run a metered provider unless someone has said so out loud.
+ *
+ * The failure this prevents is quiet: paste a key, flip LLM_PROVIDER while
+ * debugging, forget, and the bill arrives a month later. Everything this app
+ * needs is available on a free tier, so spending money should require an
+ * explicit act rather than an oversight. Set ALLOW_PAID_PROVIDERS=true to
+ * opt in.
+ */
+export function paidProvidersAllowed(): boolean {
+  return /^(true|1|yes)$/i.test((process.env.ALLOW_PAID_PROVIDERS ?? "").trim());
+}
+
 export function activeProvider(): ProviderName {
   const raw = (process.env.LLM_PROVIDER ?? "groq").trim().toLowerCase();
-  if (raw === "anthropic" || raw === "gemini" || raw === "groq") return raw;
-  throw new LlmConfigError(
-    `LLM_PROVIDER must be one of "gemini", "anthropic", "groq" — got "${raw}".`,
-  );
+  if (raw !== "anthropic" && raw !== "gemini" && raw !== "groq") {
+    throw new LlmConfigError(
+      `LLM_PROVIDER must be one of "gemini", "anthropic", "groq" — got "${raw}".`,
+    );
+  }
+
+  if (PAID_PROVIDERS.includes(raw) && !paidProvidersAllowed()) {
+    throw new LlmConfigError(
+      `LLM_PROVIDER is set to "${raw}", which bills per token with no free allowance. ` +
+        `If that is deliberate, set ALLOW_PAID_PROVIDERS=true in .env.local. ` +
+        `If it is not, switch to "groq" (free tier) or point OPENAI_COMPATIBLE_BASE_URL at a local Ollama.`,
+    );
+  }
+
+  return raw;
 }
 
 /** The OpenAI-compatible endpoint in use — Groq, Cerebras, OpenRouter, Ollama, … */
