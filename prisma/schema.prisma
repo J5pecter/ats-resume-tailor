@@ -1,0 +1,117 @@
+// ATS Resume Tailor — data model (§3 of the build spec).
+// SQLite for local dev; every type used here is Postgres-compatible so the
+// only production change is the datasource provider + DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String?
+  createdAt    DateTime @default(now())
+
+  jobDescriptions JobDescription[]
+  resumes         SourceResume[]
+  tailored        TailoredResume[]
+  analyses        Analysis[]
+  llmCalls        LlmCall[]
+}
+
+model JobDescription {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  rawText     String
+  parsedJson  Json
+  contentHash String
+  createdAt   DateTime @default(now())
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tailored TailoredResume[]
+  analyses Analysis[]
+
+  @@index([userId, createdAt])
+  @@index([userId, contentHash])
+}
+
+model SourceResume {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+  rawText     String
+  parsedJson  Json
+  contentHash String
+  createdAt   DateTime @default(now())
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tailored TailoredResume[]
+  analyses Analysis[]
+
+  @@index([userId, createdAt])
+  @@index([userId, contentHash])
+}
+
+model TailoredResume {
+  id               String   @id @default(cuid())
+  userId           String
+  jobDescriptionId String
+  sourceResumeId   String
+  version          Int      @default(1)
+  contentJson      Json
+  analysisJson     Json
+  changeLogJson    Json
+  note             String?
+  createdAt        DateTime @default(now())
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jd     JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  source SourceResume   @relation(fields: [sourceResumeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, jobDescriptionId, version])
+}
+
+// Gap analysis is expensive to produce and is consumed by both the resume tab
+// and the tailoring call, so it is persisted and reused per (JD, resume) pair.
+model Analysis {
+  id               String   @id @default(cuid())
+  userId           String
+  jobDescriptionId String
+  sourceResumeId   String
+  resultJson       Json
+  createdAt        DateTime @default(now())
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jd     JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  source SourceResume   @relation(fields: [sourceResumeId], references: [id], onDelete: Cascade)
+
+  @@unique([jobDescriptionId, sourceResumeId])
+  @@index([userId, createdAt])
+}
+
+// Rate limiting + observability. Deliberately stores NO resume or JD content.
+model LlmCall {
+  id          String   @id @default(cuid())
+  userId      String
+  promptName  String
+  provider    String
+  model       String
+  inputTokens Int      @default(0)
+  outputTokens Int     @default(0)
+  latencyMs   Int      @default(0)
+  attempts    Int      @default(1)
+  ok          Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
