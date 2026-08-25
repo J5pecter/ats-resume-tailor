@@ -46,7 +46,7 @@ npx auth secret
 | Preset | Free? | Limits | Trains on your resume? |
 |---|---|---|---|
 | **Groq** *(default)* | Yes, no card | 8k tokens/min | No |
-| **Ollama**, on your machine | Yes, genuinely unlimited | None | No — nothing leaves the machine |
+| **Ollama**, on your machine | Yes, genuinely unlimited | None — but needs a capable model, see below | No — nothing leaves the machine |
 | Google AI Studio | Yes, no card | Very high | **Yes** — free tier allows human review and training |
 | Anthropic | No, ~cents per resume | High | No |
 | Cerebras | **No longer free** — see below | 90k tokens/min once funded | No |
@@ -63,6 +63,15 @@ these were verified against live accounts in August 2026.
 > only reachable once the account is funded. It is a good paid option, not a
 > free one.
 
+> **Local models need to be big enough.** Ollama is genuinely unlimited and
+> genuinely private, but the tailoring prompt is demanding and a small model
+> will fail it in a way that is easy to miss. Tested here on a 4 GB GPU:
+> `qwen2.5:3b` parsed job descriptions and resumes fine, then on the rewrite
+> cited the employer's name line as evidence for every bullet and copied a
+> bullet from one employer onto another. All of it was schema-valid. The
+> evidence check rejected every bullet, correctly, leaving an empty resume.
+> Budget for a 7B model or larger (~8 GB VRAM) before relying on local.
+>
 > **On "unlimited free":** no hosted free tier is unlimited — every one of them
 > meters you somewhere, and providers that advertise otherwise are rate-limiting
 > you by another name. The only genuinely unlimited option is running the model
@@ -122,7 +131,8 @@ drifting apart.
 | Guard | Where | What it catches |
 |---|---|---|
 | Zod validation + one retry | `lib/llm/client.ts` | Malformed or off-schema model output |
-| Evidence check (≥70% token overlap) | `lib/validate/evidence.ts` | Invented bullets **and invented skills** with no basis in your resume |
+| Evidence traceability (≥70% overlap) | `lib/validate/evidence.ts` | Invented bullets **and invented skills** with no basis in your resume |
+| Evidence relatedness (≥30% overlap) | `lib/validate/evidence.ts` | Real quotes attached to claims they do not support |
 | Forbidden-keyword scan | `lib/validate/keywords.ts` | Gap keywords smuggled into the rewrite |
 | Field-by-field drift diff | `lib/validate/drift.ts` | A refinement quietly changing things you did not ask about |
 | ASCII sanitisation | `lib/validate/sanitize.ts` | Non-breaking hyphens and curly quotes silently costing you keyword matches |

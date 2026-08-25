@@ -1,43 +1,40 @@
 import { z } from "zod";
+import { tolerantArray, tolerantString } from "./tolerant";
 
 /** MatchAnalysis — output of the ATS screening simulator (§5.3). */
 
 export const MatchAnalysisSchema = z.object({
   atsScore: z.coerce.number().min(0).max(100),
-  matched: z
-    .array(
+  matched: tolerantArray(
       z.object({
         term: z.string(),
         weight: z.coerce.number().default(1),
-        evidence: z.string().default(""),
+        evidence: tolerantString().default(""),
       }),
     )
     .default([]),
   /** Adjacent/transferable experience exists but the exact term is absent — the highest-value fixes. */
-  partial: z
-    .array(
+  partial: tolerantArray(
       z.object({
         term: z.string(),
         weight: z.coerce.number().default(1),
-        closestEvidence: z.string().default(""),
-        howToSurface: z.string().default(""),
+        closestEvidence: tolerantString().default(""),
+        howToSurface: tolerantString().default(""),
       }),
     )
     .default([]),
   /** No supporting evidence at all. These are never to be inserted into the tailored resume. */
-  missing: z
-    .array(
+  missing: tolerantArray(
       z.object({
         term: z.string(),
         weight: z.coerce.number().default(1),
-        honestNote: z.string().default(""),
+        honestNote: tolerantString().default(""),
       }),
     )
     .default([]),
-  blockers: z
-    .array(z.object({ filter: z.string(), candidateStatus: z.string().default("") }))
+  blockers: tolerantArray(z.object({ filter: z.string(), candidateStatus: z.string().default("") }))
     .default([]),
-  topThreeFixes: z.array(z.string()).default([]),
+  topThreeFixes: tolerantArray(z.string()).default([]),
 });
 
 export type MatchAnalysis = z.infer<typeof MatchAnalysisSchema>;

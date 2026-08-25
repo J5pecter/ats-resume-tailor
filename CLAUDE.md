@@ -11,6 +11,14 @@ Every generated bullet AND every skill carries `sourceEvidence` traceable to
 the original, and `lib/validate/evidence.ts` verifies that link after
 generation. Anything that fails is dropped and the rejection is shown.
 
+Evidence is checked on two independent axes, and both matter. Traceability
+(>=70% token overlap with the source) proves the quote is real. Relatedness
+(>=30% overlap with the claim, measured against the shorter side) proves the
+quote is *about* that claim. A weak local model passed the first and failed the
+second by citing "Arihant Securities - Senior Product Manager" as evidence for
+every bullet, then copying a bullet onto the wrong employer. Traceability alone
+would have shipped it.
+
 Skills use a dual rule — name-appears-verbatim OR evidence-traces — because
 relabelling a real skill into the JD's vocabulary is explicitly permitted, and
 a name-only check would reject that legitimate rewrite. See `SkillSchema` in
@@ -58,6 +66,10 @@ skills carried evidence still parse.
   those break both the ATS's literal keyword matching and our own tokeniser.
 - Token reservations are tight on purpose — metered tiers bill
   `prompt + max_completion` whether used or not. See `tests/unit/prompt-budget.test.ts`.
+- `lib/schema/tolerant.ts` — models express "none" as `null` as often as `[]`,
+  and both are compliance. Rejecting one buys a retry on strong models and
+  outright failure on weak ones. Tolerance is about shape only; every rule that
+  matters is enforced after parsing.
 - Every data route checks session AND row ownership via `lib/ownership.ts`.
 - Never log resume or JD content. `LlmCall` stores counts and timings only.
 

@@ -273,9 +273,12 @@ async function callOpenAiCompatible(req: LlmRequest): Promise<LlmRawResponse> {
   // gpt-oss models reason before answering, and Groq exposes that as a dial.
   // Reasoning is charged as completion tokens, so on a tight budget it competes
   // directly with the JSON we actually need — high effort with little headroom
-  // buys better thinking and a truncated answer. Sending the parameter to a
-  // model that does not support it is an error, hence the model-id gate.
-  if (/gpt-oss/i.test(model)) {
+  // buys better thinking and a truncated answer.
+  //
+  // Gated on the model id because sending it to a model that does not support
+  // it is an error, and gated on `!local` because Ollama serves gpt-oss under
+  // the same name but rejects the parameter.
+  if (!local && /gpt-oss/i.test(model)) {
     body.reasoning_effort = req.thinking && maxCompletion >= 5000 ? "medium" : "low";
   }
 

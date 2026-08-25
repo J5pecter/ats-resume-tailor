@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tolerantArray, tolerantOptional, tolerantString } from "./tolerant";
 
 /**
  * ResumeDoc — the spine of the application (§4).
@@ -20,29 +21,29 @@ const looseEmail = z
 
 export const BulletSchema = z.object({
   text: nonEmpty,
-  keywordsHit: z.array(z.string()).default([]),
+  keywordsHit: tolerantArray(z.string()).default([]),
   /** Verbatim fragment of the ORIGINAL resume that justifies this bullet. */
-  sourceEvidence: z.string().default(""),
+  sourceEvidence: tolerantString().default(""),
 });
 
 export const ExperienceSchema = z.object({
   company: nonEmpty,
   role: nonEmpty,
-  location: z.string().optional(),
-  startDate: z.string().default(""),
-  endDate: z.string().default(""),
-  context: z.string().optional(),
-  bullets: z.array(BulletSchema).min(1).max(8),
+  location: tolerantOptional(z.string()),
+  startDate: tolerantString().default(""),
+  endDate: tolerantString().default(""),
+  context: tolerantOptional(z.string()),
+  bullets: z.preprocess((v) => v ?? [], z.array(BulletSchema).min(1).max(8)),
 });
 
 export const ContactSchema = z.object({
   fullName: nonEmpty,
-  headline: z.string().default(""),
+  headline: tolerantString().default(""),
   email: looseEmail.default(""),
-  phone: z.string().default(""),
-  location: z.string().default(""),
-  linkedin: z.string().optional(),
-  portfolio: z.string().optional(),
+  phone: tolerantString().default(""),
+  location: tolerantString().default(""),
+  linkedin: tolerantOptional(z.string()),
+  portfolio: tolerantOptional(z.string()),
 });
 
 /**
@@ -61,50 +62,50 @@ export const SkillSchema = z.preprocess(
   (value) => (typeof value === "string" ? { name: value, sourceEvidence: "" } : value),
   z.object({
     name: nonEmpty,
-    sourceEvidence: z.string().default(""),
+    sourceEvidence: tolerantString().default(""),
   }),
 );
 
 export const CoreSkillGroupSchema = z.object({
   category: nonEmpty,
-  skills: z.array(SkillSchema).min(1),
+  skills: z.preprocess((v) => v ?? [], z.array(SkillSchema).min(1)),
 });
 
 export const ProjectSchema = z.object({
   name: nonEmpty,
-  description: z.string().default(""),
-  stack: z.array(z.string()).optional(),
-  link: z.string().optional(),
+  description: tolerantString().default(""),
+  stack: tolerantOptional(z.array(z.string())),
+  link: tolerantOptional(z.string()),
 });
 
 export const EducationSchema = z.object({
   institution: nonEmpty,
-  degree: z.string().default(""),
-  field: z.string().optional(),
-  endDate: z.string().default(""),
-  score: z.string().optional(),
+  degree: tolerantString().default(""),
+  field: tolerantOptional(z.string()),
+  endDate: tolerantString().default(""),
+  score: tolerantOptional(z.string()),
 });
 
 export const CertificationSchema = z.object({
   name: nonEmpty,
-  issuer: z.string().optional(),
-  date: z.string().optional(),
+  issuer: tolerantOptional(z.string()),
+  date: tolerantOptional(z.string()),
 });
 
 export const AdditionalSchema = z.object({
   label: nonEmpty,
-  value: z.string().default(""),
+  value: tolerantString().default(""),
 });
 
 export const ResumeDocSchema = z.object({
   contact: ContactSchema,
-  summary: z.string().default(""),
-  coreSkills: z.array(CoreSkillGroupSchema).max(5).default([]),
-  experience: z.array(ExperienceSchema).default([]),
-  projects: z.array(ProjectSchema).optional(),
-  education: z.array(EducationSchema).default([]),
-  certifications: z.array(CertificationSchema).optional(),
-  additional: z.array(AdditionalSchema).optional(),
+  summary: tolerantString().default(""),
+  coreSkills: z.preprocess((v) => v ?? [], z.array(CoreSkillGroupSchema).max(5)).default([]),
+  experience: tolerantArray(ExperienceSchema).default([]),
+  projects: tolerantOptional(z.array(ProjectSchema)),
+  education: tolerantArray(EducationSchema).default([]),
+  certifications: tolerantOptional(z.array(CertificationSchema)),
+  additional: tolerantOptional(z.array(AdditionalSchema)),
 });
 
 export type ResumeDoc = z.infer<typeof ResumeDocSchema>;

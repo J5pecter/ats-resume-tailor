@@ -132,6 +132,15 @@ Writing rules 6–13 and ATS formatting rules 14–16 are in
 - `checkEvidence()` — every bullet's `sourceEvidence` must reach ≥70% token
   overlap with the raw source resume. Failures are stripped from the document
   and reported to the user rather than silently dropped.
+- The same function applies a second, independent bar: **relatedness**. The
+  cited fragment must share at least 30% of its meaningful tokens with the
+  claim it is attached to, measured against the shorter side. Traceability
+  alone proved insufficient — a model will cite any real fragment, and one was
+  observed attaching the employer's name line to every bullet and moving a
+  bullet to the wrong employer. Every citation was genuinely present in the
+  source. The threshold is deliberately low, because rewriting into the
+  posting's vocabulary legitimately drops shared wording; it is set to catch
+  evidence that is unrelated, not evidence that is reworded.
 - Skills are checked by the same function, under a **dual rule**: a skill
   passes if its *name* appears verbatim in the source (whole-word), **or** if
   its `sourceEvidence` traces at ≥70% overlap. Both routes are needed. Rule 10

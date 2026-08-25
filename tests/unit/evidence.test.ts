@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { checkEvidence, stripUnsupported, tokenOverlap, tokenise } from "@/lib/validate/evidence";
+import {
+  RELATEDNESS_THRESHOLD,
+  checkEvidence,
+  relatedness,
+  stripUnsupported,
+  tokenOverlap,
+  tokenise,
+} from "@/lib/validate/evidence";
 import { SAMPLE_RAW_TEXT, SAMPLE_RESUME } from "../fixtures/resume";
 import type { ResumeDoc } from "@/lib/schema/resume";
 
@@ -172,5 +179,74 @@ describe("evidence check — skills", () => {
 
     const cleaned = stripUnsupported(doc, failures);
     expect(checkEvidence(cleaned, SAMPLE_RAW_TEXT).passed).toBe(true);
+  });
+});
+
+describe("evidence must be about the claim, not merely real", () => {
+  // Traceability alone proved insufficient in practice: a weak model attached
+  // the employer's own name line to every bullet, and copied a bullet about
+  // one employer onto another. Every citation was genuinely present in the
+  // source, so every one passed. Nothing tied it to what the bullet claimed.
+  it("rejects a real fragment that has nothing to do with the bullet", () => {
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    doc.experience[0].bullets = [
+      {
+        text: "Led the redesign of the digital onboarding journey, cutting KYC drop-off by 31 percent.",
+        keywordsHit: [],
+        // Verbatim from the source — and completely unrelated to the claim.
+        sourceEvidence: "Arihant Securities \u2014 Senior Product Manager",
+      },
+    ];
+
+    const result = checkEvidence(doc, SAMPLE_RAW_TEXT);
+    const failure = result.failures.find((f) => f.kind === "bullet");
+    expect(failure).toBeDefined();
+    expect(failure?.reason).toBe("unrelated");
+  });
+
+  it("rejects a bullet copied onto the wrong employer", () => {
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    // Paylane never did the onboarding work; the citation belongs to Arihant.
+    doc.experience[1].bullets.push({
+      text: "Led the digital onboarding journey and prioritised the 2024 roadmap.",
+      keywordsHit: [],
+      sourceEvidence: "Arihant Securities \u2014 Senior Product Manager",
+    });
+
+    const { failures } = checkEvidence(doc, SAMPLE_RAW_TEXT);
+    expect(failures.some((f) => f.reason === "unrelated")).toBe(true);
+  });
+
+  it("still accepts a heavy rewrite that keeps the substance", () => {
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    doc.experience[0].bullets = [
+      {
+        // Reworded into the posting's vocabulary, same underlying facts.
+        text: "Owned the digital onboarding funnel end to end, reducing KYC drop-off 31% across 40,000 monthly applicants.",
+        keywordsHit: ["digital onboarding", "KYC"],
+        sourceEvidence:
+          "Led redesign of digital onboarding journey; KYC drop-off fell 31% across 40,000 monthly applicants",
+      },
+    ];
+
+    expect(checkEvidence(doc, SAMPLE_RAW_TEXT).passed).toBe(true);
+  });
+
+  it("does not reject the whole known-good sample document", () => {
+    // Guards against the relatedness bar being set so high that legitimate
+    // tailoring starts failing.
+    expect(checkEvidence(SAMPLE_RESUME, SAMPLE_RAW_TEXT).passed).toBe(true);
+  });
+
+  it("scores relatedness against the shorter side", () => {
+    // A short bullet citing a long fragment should not be penalised for length.
+    expect(
+      relatedness(
+        "Cut KYC drop-off 31%.",
+        "Led redesign of digital onboarding journey; KYC drop-off fell 31% across 40,000 monthly applicants",
+      ),
+    ).toBeGreaterThanOrEqual(RELATEDNESS_THRESHOLD);
+
+    expect(relatedness("Led the redesign.", "Arihant Securities Senior Product Manager")).toBe(0);
   });
 });

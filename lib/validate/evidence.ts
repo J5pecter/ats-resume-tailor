@@ -16,6 +16,25 @@ import type { ResumeDoc } from "@/lib/schema/resume";
 
 export const EVIDENCE_THRESHOLD = 0.7;
 
+/**
+ * A second, independent bar: the cited fragment must actually be *about* the
+ * claim it is attached to.
+ *
+ * Traceability alone is not enough. A model under pressure will cite any real
+ * fragment — a weak local model was observed attaching the company's own name
+ * line ("Arihant Securities - Senior Product Manager") to every bullet, and
+ * then copying a bullet about one employer onto another. Every one of those
+ * passed the traceability check, because the quoted string genuinely did appear
+ * in the source. Nothing connected it to what the bullet claimed.
+ *
+ * Measured against the shorter side, so that a long bullet summarising a short
+ * fragment, or a short bullet citing a long one, are both judged fairly. Set
+ * low on purpose: rewriting into the job description's vocabulary is permitted
+ * and legitimately drops shared wording. This is here to catch evidence that is
+ * unrelated, not evidence that is merely reworded.
+ */
+export const RELATEDNESS_THRESHOLD = 0.3;
+
 const STOP_WORDS = new Set([
   "a", "an", "and", "the", "of", "to", "in", "for", "on", "with", "by", "at",
   "from", "as", "is", "was", "were", "be", "been", "that", "this", "it", "its",
@@ -38,6 +57,18 @@ export function tokenOverlap(evidence: string, sourceTokens: Set<string>): numbe
   return hits / tokens.length;
 }
 
+/** Shared meaningful tokens, relative to whichever side has fewer. */
+export function relatedness(claim: string, evidence: string): number {
+  const claimTokens = new Set(tokenise(claim));
+  const evidenceTokens = new Set(tokenise(evidence));
+  const smaller = Math.min(claimTokens.size, evidenceTokens.size);
+  if (smaller === 0) return 0;
+
+  let shared = 0;
+  for (const token of evidenceTokens) if (claimTokens.has(token)) shared++;
+  return shared / smaller;
+}
+
 export type EvidenceKind = "bullet" | "skill";
 
 export interface EvidenceFailure {
@@ -50,7 +81,7 @@ export interface EvidenceFailure {
   text: string;
   sourceEvidence: string;
   overlap: number;
-  reason: "empty" | "unsupported";
+  reason: "empty" | "unsupported" | "unrelated";
 }
 
 export interface EvidenceCheckResult {
@@ -109,6 +140,20 @@ export function checkEvidence(resume: ResumeDoc, rawSourceText: string): Evidenc
           sourceEvidence: evidence,
           overlap,
           reason: "unsupported",
+        });
+        return;
+      }
+
+      // Traceable, but is it about this bullet?
+      if (relatedness(bullet.text, evidence) < RELATEDNESS_THRESHOLD) {
+        failures.push({
+          kind: "bullet",
+          path,
+          where,
+          text: bullet.text,
+          sourceEvidence: evidence,
+          overlap,
+          reason: "unrelated",
         });
       }
     });

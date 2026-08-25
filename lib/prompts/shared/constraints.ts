@@ -12,6 +12,11 @@ export const NO_FABRICATION = `═══ ABSOLUTE CONSTRAINTS ═══
    For a skill named exactly as the original resume names it, quote the phrase
    it appears in. For a skill you have relabelled into the job description's
    vocabulary, quote the work that earns the new label.
+   The quote must be ABOUT the specific claim. Quote the original bullet that
+   this bullet rewrites. Never quote the company name, the job title, or the
+   date line as evidence for a bullet — those identify the role, they do not
+   support anything you claim was done in it. Evidence that does not share
+   substance with its bullet is rejected and the bullet is dropped.
 3. You may: reorder, re-prioritise, rephrase, merge, split, re-title within
    truth, expand acronyms, surface buried achievements, and adopt the JD's
    vocabulary where the underlying work genuinely matches.

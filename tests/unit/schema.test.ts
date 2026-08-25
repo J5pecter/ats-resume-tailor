@@ -102,3 +102,103 @@ describe("schema tolerance", () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe("tolerance to how models express emptiness", () => {
+  // A local 3B model failed the whole job-description parse on exactly this:
+  // it returned "certifications": null where the schema demanded []. Both mean
+  // "there are none", so rejecting one of them bought nothing.
+  it("accepts null for an absent array", () => {
+    const profile = JDProfileSchema.parse({
+      roleTitle: "Product Manager",
+      seniority: "senior",
+      hardFilters: { minYears: 5, degree: null, location: null, certifications: null },
+      mustHaves: null,
+      niceToHaves: null,
+      atsKeywords: null,
+      responsibilities: null,
+      impliedPriorities: null,
+      tone: "corporate",
+    });
+
+    expect(profile.hardFilters.certifications).toEqual([]);
+    expect(profile.mustHaves).toEqual([]);
+    expect(profile.atsKeywords).toEqual([]);
+    expect(profile.responsibilities).toEqual([]);
+  });
+
+  it("accepts null for an unstated string", () => {
+    const analysis = MatchAnalysisSchema.parse({
+      atsScore: 60,
+      matched: [{ term: "SQL", weight: 4, evidence: null }],
+      missing: [{ term: "Kubernetes", weight: 3, honestNote: null }],
+    });
+    expect(analysis.matched[0].evidence).toBe("");
+    expect(analysis.missing[0].honestNote).toBe("");
+  });
+
+  it("accepts null inside a resume document", () => {
+    const doc = ResumeDocSchema.parse({
+      ...SAMPLE_RESUME,
+      summary: null,
+      coreSkills: null,
+      experience: [
+        {
+          company: "Arihant Securities",
+          role: "Senior Product Manager",
+          startDate: "Apr 2023",
+          endDate: "Present",
+          bullets: [{ text: "Led the redesign.", keywordsHit: null, sourceEvidence: null }],
+        },
+      ],
+      education: null,
+    });
+
+    expect(doc.summary).toBe("");
+    expect(doc.coreSkills).toEqual([]);
+    expect(doc.education).toEqual([]);
+    expect(doc.experience[0].bullets[0].keywordsHit).toEqual([]);
+    expect(doc.experience[0].bullets[0].sourceEvidence).toBe("");
+  });
+
+  it("still rejects genuinely wrong shapes", () => {
+    // Tolerance is about emptiness, not about accepting nonsense.
+    expect(JDProfileSchema.safeParse({ roleTitle: "PM", atsKeywords: "SQL, Python" }).success).toBe(false);
+    expect(ResumeDocSchema.safeParse({ ...SAMPLE_RESUME, experience: "none" }).success).toBe(false);
+  });
+
+  it("accepts null for absent optional sections", () => {
+    // The local model failed the whole tailoring call on exactly this: it sent
+    // "projects": null, "certifications": null, "additional": null to mean the
+    // candidate has none. `.optional()` alone rejects null.
+    const doc = ResumeDocSchema.parse({
+      ...SAMPLE_RESUME,
+      projects: null,
+      certifications: null,
+      additional: null,
+      experience: [
+        {
+          company: "Arihant Securities",
+          role: "Senior Product Manager",
+          location: null,
+          context: null,
+          startDate: "Apr 2023",
+          endDate: "Present",
+          bullets: [{ text: "Led the redesign.", keywordsHit: [], sourceEvidence: "Led the redesign" }],
+        },
+      ],
+    });
+
+    expect(doc.projects).toBeUndefined();
+    expect(doc.certifications).toBeUndefined();
+    expect(doc.experience[0].location).toBeUndefined();
+  });
+
+  it("still enforces the constraints that matter", () => {
+    // A skill group with no skills is meaningless, null or not.
+    const result = ResumeDocSchema.safeParse({
+      ...SAMPLE_RESUME,
+      coreSkills: [{ category: "Product", skills: null }],
+    });
+    expect(result.success).toBe(false);
+  });
+});
