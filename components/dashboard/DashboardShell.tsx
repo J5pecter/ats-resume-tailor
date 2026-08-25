@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobDescriptionTab, type JdState } from "./JobDescriptionTab";
 import { ResumeTab, type ResumeState, type TailorOutcome } from "./ResumeTab";
 import { RefineTab } from "./RefineTab";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { ApiError, getJson } from "@/lib/client/api";
 import type { MatchAnalysis } from "@/lib/schema/analysis";
 import { cn } from "@/lib/utils";
@@ -94,6 +95,7 @@ export function DashboardShell({ userLabel }: { userLabel: string }) {
               </span>
             ) : null}
             <span className="hidden text-sm text-muted-foreground md:inline">{userLabel}</span>
+            <ChangePasswordDialog />
             <DeleteDataButton />
             <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: "/" })}>
               <LogOut className="size-4" />
