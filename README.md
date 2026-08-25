@@ -1,4 +1,4 @@
-# ATS Resume Tailor
+﻿# ATS Resume Tailor
 
 Paste a job description and your existing resume. Get back a rewritten,
 ATS-optimised resume aimed at that specific role — then refine it
@@ -151,7 +151,7 @@ every heading survived.
 ```bash
 npm run dev          # dev server
 npm run build        # production build
-npm test             # unit suite (46 tests)
+npm test             # unit suite (75 tests)
 npm run test:e2e     # playwright happy path
 npm run typecheck    # tsc --noEmit
 npm run db:studio    # browse the database
