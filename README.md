@@ -183,10 +183,58 @@ Resume content is sensitive personal data, and this build treats it that way:
 
 ## Deploying
 
-The schema is written to be Postgres-compatible. To deploy, change the
-`datasource` provider in `prisma/schema.prisma` to `postgresql`, point
-`DATABASE_URL` at your database, set `AUTH_URL` to the deployed origin, and run
-`npx prisma migrate deploy`.
+**GitHub Pages cannot run this app.** Pages serves static files; this is a
+Next.js app with server routes, a database, and an API key that must stay
+server-side. GitHub hosts the source — something else has to run it.
+
+Everything below has a free tier that covers personal use.
+
+**1. A Postgres database.** SQLite is a file on disk, and serverless hosts give
+you an ephemeral filesystem, so the local database will not survive a deploy.
+The schema is already Postgres-compatible — change one line in
+`prisma/schema.prisma`:
+
+```prisma
+datasource db {
+  provider = "postgresql"   // was "sqlite"
+  url      = env("DATABASE_URL")
+}
+```
+
+Create a free database at [Neon](https://neon.tech) or
+[Supabase](https://supabase.com) and copy its connection string.
+
+**2. Deploy.** Import the repo at [vercel.com/new](https://vercel.com/new). Set
+these environment variables in the project settings:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | your Neon/Supabase connection string |
+| `AUTH_SECRET` | a fresh one — `npx auth secret` |
+| `AUTH_URL` | `https://your-app.vercel.app` |
+| `LLM_PROVIDER` | `groq` |
+| `OPENAI_COMPATIBLE_API_KEY` | your provider key |
+| `OPENAI_COMPATIBLE_BASE_URL` | your provider's endpoint |
+| `OPENAI_COMPATIBLE_MODEL` | your model |
+| `OPENAI_COMPATIBLE_TPM` | your tier's per-minute budget |
+
+Then run the migrations against the new database once:
+
+```bash
+npx prisma migrate deploy
+```
+
+**Use a different `AUTH_SECRET` in production than locally.** It signs session
+tokens; sharing it between environments means a session minted on your laptop
+is valid against the deployed app.
+
+**A caution before you make it public.** Anyone who signs up shares your API key
+and its rate limit, and their resumes land in your database — which makes you
+responsible for that data. For personal use, keep the deployment private
+(Vercel password protection) or just run it locally with `npm run dev`.
+
+Ollama cannot be used from a deployed app: it runs on your machine, not the
+server. Local model, local app.
 
 ---
 
