@@ -45,22 +45,30 @@ npx auth secret
 
 | Preset | Free? | Limits | Trains on your resume? |
 |---|---|---|---|
-| **Cerebras** *(recommended)* | Yes, no card | ~60k tokens/min, ~1M/day | No |
+| **Groq** *(default)* | Yes, no card | 8k tokens/min | No |
 | **Ollama**, on your machine | Yes, genuinely unlimited | None | No — nothing leaves the machine |
-| Groq | Yes, no card | 8k tokens/min | No |
-| Google AI Studio | Yes | Very high | **Yes** — free tier allows human review and training |
+| Google AI Studio | Yes, no card | Very high | **Yes** — free tier allows human review and training |
 | Anthropic | No, ~cents per resume | High | No |
+| Cerebras | **No longer free** — see below | 90k tokens/min once funded | No |
 
-`.env.example` carries a ready-to-paste block for each. Free-tier numbers were
-checked in August 2026 and move around.
+`.env.example` carries a ready-to-paste block for each. Free tiers move around;
+these were verified against live accounts in August 2026.
+
+> **Cerebras is listed but not recommended as a free option.** Several
+> comparison articles still describe a generous Cerebras free tier. On a
+> freshly created account in August 2026 that was not the case: the console
+> shows pay-as-you-go with a $0.00 balance and no free credits, and the API
+> returns `402 payment_required` until you add funds. The quota page advertises
+> 90k tokens/min, which is what those articles are quoting — but the quota is
+> only reachable once the account is funded. It is a good paid option, not a
+> free one.
 
 > **On "unlimited free":** no hosted free tier is unlimited — every one of them
 > meters you somewhere, and providers that advertise otherwise are rate-limiting
 > you by another name. The only genuinely unlimited option is running the model
 > yourself with Ollama, which is also the only option where your resume never
 > leaves your computer. The trade is quality: a 7B local model writes noticeably
-> weaker bullets than Cerebras' 70B. Cerebras is the best balance for most
-> people; Ollama is the right answer if the resume is genuinely sensitive.
+> weaker bullets than the hosted 120B.
 >
 > Whatever you pick, read its data policy before pasting a real resume. Google's
 > free tier is the one to be careful with.
@@ -132,7 +140,7 @@ if a reply is genuinely cut short.
 On Groq's 8k/min tier a full run exceeds the budget, so the app pauses mid-flow
 and continues by itself; waits up to 45 seconds are ridden out automatically and
 anything longer is reported with how long to wait. Nothing is lost either way.
-On Cerebras (~60k/min) or Ollama (unlimited) it does not pause at all.
+On Ollama (unlimited) it does not pause at all, and nor does a funded paid tier.
 
 ### Exports
 
