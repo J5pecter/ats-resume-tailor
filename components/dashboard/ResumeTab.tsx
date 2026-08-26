@@ -42,6 +42,14 @@ export interface TailorOutcome {
     }[];
   };
   forbiddenKeywordHits: { term: string; where: string }[];
+  retention?: {
+    originalBullets: number;
+    keptBullets: number;
+    originalSkills: number;
+    keptSkills: number;
+    substantialLoss: boolean;
+    dropped: { kind: "bullet" | "skill" | "role"; where: string; text: string }[];
+  };
 }
 
 export function ResumeTab({

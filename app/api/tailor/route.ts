@@ -14,6 +14,7 @@ import { ResumeDocSchema } from "@/lib/schema/resume";
 import { checkEvidence, stripUnsupported } from "@/lib/validate/evidence";
 import { findForbiddenKeywords } from "@/lib/validate/keywords";
 import { sanitiseResumeDoc } from "@/lib/validate/sanitize";
+import { checkRetention } from "@/lib/validate/retention";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,6 +74,10 @@ export async function POST(req: Request) {
 
     const forbidden = findForbiddenKeywords(cleanedResume, analysis);
 
+    // What did the rewrite leave behind? Trimming is permitted; trimming
+    // invisibly is not, because the candidate cannot restore what they cannot see.
+    const retention = checkRetention(originalResume, cleanedResume);
+
     const contentJson = ResumeDocSchema.parse(cleanedResume);
 
     const row = await prisma.tailoredResume.create({
@@ -112,6 +117,14 @@ export async function POST(req: Request) {
         })),
       },
       forbiddenKeywordHits: forbidden,
+      retention: {
+        originalBullets: retention.originalBullets,
+        keptBullets: retention.keptBullets,
+        originalSkills: retention.originalSkills,
+        keptSkills: retention.keptSkills,
+        substantialLoss: retention.substantialLoss,
+        dropped: retention.dropped.slice(0, 30),
+      },
     });
   } catch (err) {
     return routeError(err);

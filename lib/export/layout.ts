@@ -38,15 +38,35 @@ export const HEADINGS = {
  * keeps the two documents visually the same without shipping font binaries.
  */
 export const TYPE = {
-  name: 14,
+  name: 17,
   headline: 10.5,
   contact: 9.5,
   section: 11,
-  body: 10.5,
+  body: 10,
   meta: 9.5,
 } as const;
 
-export const MARGIN_INCHES = 0.7;
+/**
+ * Vertical rhythm, in points. Kept here rather than in each renderer so the
+ * DOCX and the PDF cannot drift apart on spacing the way they would if each
+ * carried its own numbers.
+ */
+export const SPACE = {
+  afterName: 2,
+  afterHeadline: 2,
+  afterContact: 11,
+  beforeSection: 11,
+  afterSection: 5,
+  betweenParagraphs: 4,
+  betweenSkillLines: 2.5,
+  beforeRole: 8,
+  afterRoleHeader: 1,
+  afterRoleMeta: 2,
+  betweenBullets: 2.5,
+} as const;
+
+/** 0.6in is the tightest the ATS rules allow, and buys a few more lines of content. */
+export const MARGIN_INCHES = 0.65;
 
 export function formatDateRange(start: string, end: string): string {
   const s = start.trim();
@@ -131,12 +151,10 @@ export function buildBlocks(resume: ResumeDoc): Block[] {
   if (resume.education.length) {
     blocks.push({ kind: "section", text: HEADINGS.education });
     for (const edu of resume.education) {
-      blocks.push({
-        kind: "roleHeader",
-        left: [edu.degree, edu.field].filter(Boolean).join(", ") || edu.institution,
-        right: edu.endDate,
-      });
-      const meta = [edu.degree || edu.field ? edu.institution : "", edu.score]
+      // Institution on the bold line: it is the anchor a human scans for and
+      // the token an ATS matches against, so it should not be demoted.
+      blocks.push({ kind: "roleHeader", left: edu.institution, right: edu.endDate });
+      const meta = [[edu.degree, edu.field].filter(Boolean).join(", "), edu.score]
         .map((m) => (m ?? "").trim())
         .filter(Boolean)
         .join("  |  ");

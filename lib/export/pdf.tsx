@@ -11,7 +11,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { buildBlocks, MARGIN_INCHES, TYPE, type Block } from "./layout";
+import { buildBlocks, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
 
 /**
  * PDF export (§6.3). Mirrors the DOCX layout block for block — both walk the
@@ -49,42 +49,51 @@ const styles = StyleSheet.create({
     fontFamily: FONT_BOLD,
     fontSize: TYPE.name,
     textAlign: "center",
-    marginBottom: 2,
+    letterSpacing: 0.6,
+    marginBottom: SPACE.afterName,
   },
-  headline: { fontSize: TYPE.headline, textAlign: "center", marginBottom: 2 },
+  headline: {
+    fontSize: TYPE.headline,
+    textAlign: "center",
+    color: "#222222",
+    marginBottom: SPACE.afterHeadline,
+  },
   contact: {
     fontSize: TYPE.contact,
     textAlign: "center",
     color: "#333333",
-    marginBottom: 8,
+    marginBottom: SPACE.afterContact,
   },
   section: {
     fontFamily: FONT_BOLD,
     fontSize: TYPE.section,
-    marginTop: 11,
-    marginBottom: 4,
-    paddingBottom: 2,
+    letterSpacing: 0.4,
+    marginTop: SPACE.beforeSection,
+    marginBottom: SPACE.afterSection,
+    paddingBottom: 2.5,
     borderBottomWidth: 0.75,
     borderBottomColor: "#999999",
     borderBottomStyle: "solid",
   },
-  paragraph: { fontSize: TYPE.body, marginBottom: 4 },
-  skillsRow: { flexDirection: "row", marginBottom: 2.5 },
+  paragraph: { fontSize: TYPE.body, marginBottom: SPACE.betweenParagraphs },
+  skillsRow: { flexDirection: "row", marginBottom: SPACE.betweenSkillLines },
   skillsCategory: { fontFamily: FONT_BOLD, fontSize: TYPE.body },
   skillsValue: { fontSize: TYPE.body, flex: 1 },
   roleHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 6.5,
-    marginBottom: 1,
+    marginTop: SPACE.beforeRole,
+    marginBottom: SPACE.afterRoleHeader,
   },
   roleLeft: { fontFamily: FONT_BOLD, fontSize: TYPE.body, flex: 1, paddingRight: 8 },
   roleRight: { fontSize: TYPE.meta },
-  roleMeta: { fontSize: TYPE.meta, color: "#444444", marginBottom: 2 },
-  bulletRow: { flexDirection: "row", marginBottom: 2 },
-  bulletGlyph: { width: 9, fontSize: TYPE.body },
+  roleMeta: { fontSize: TYPE.meta, color: "#444444", marginBottom: SPACE.afterRoleMeta },
+  // Hanging indent: the glyph column is fixed, so wrapped lines align under the
+  // text rather than under the bullet.
+  bulletRow: { flexDirection: "row", marginBottom: SPACE.betweenBullets, paddingLeft: 2 },
+  bulletGlyph: { width: 10, fontSize: TYPE.body },
   bulletText: { flex: 1, fontSize: TYPE.body },
-  labelledRow: { flexDirection: "row", marginBottom: 2 },
+  labelledRow: { flexDirection: "row", marginBottom: SPACE.betweenBullets },
   labelledLabel: { fontFamily: FONT_BOLD, fontSize: TYPE.body },
   labelledValue: { fontSize: TYPE.body, flex: 1 },
 });

@@ -13,7 +13,7 @@ import {
   TextRun,
 } from "docx";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { buildBlocks, MARGIN_INCHES, TYPE, type Block } from "./layout";
+import { buildBlocks, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
 
 /**
  * DOCX export (§6.2).
@@ -27,8 +27,11 @@ import { buildBlocks, MARGIN_INCHES, TYPE, type Block } from "./layout";
 const FONT = "Arial";
 const BULLET_REF = "resume-bullets";
 
-/** docx sizes are half-points; margins are twips (1 inch = 1440). */
+/** docx sizes are half-points; margins and spacing are twips (1 inch = 1440, 1pt = 20). */
 const hp = (points: number) => Math.round(points * 2);
+const tw = (points: number) => Math.round(points * 20);
+/** Line spacing is expressed in 240ths of a line; 1.15 reads better than single. */
+const LINE = Math.round(240 * 1.15);
 const MARGIN_TWIPS = Math.round(MARGIN_INCHES * 1440);
 
 function run(text: string, opts: { bold?: boolean; size: number; color?: string } = { size: TYPE.body }) {
@@ -46,28 +49,28 @@ function renderBlock(block: Block): Paragraph {
     case "name":
       return new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 40 },
+        spacing: { after: tw(SPACE.afterName) },
         children: [run(block.text, { bold: true, size: TYPE.name })],
       });
 
     case "headline":
       return new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 40 },
+        spacing: { after: tw(SPACE.afterHeadline) },
         children: [run(block.text, { size: TYPE.headline })],
       });
 
     case "contact":
       return new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 120 },
+        spacing: { after: tw(SPACE.afterContact) },
         children: [run(block.text, { size: TYPE.contact, color: "333333" })],
       });
 
     case "section":
       return new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        spacing: { before: 220, after: 90 },
+        spacing: { before: tw(SPACE.beforeSection), after: tw(SPACE.afterSection) },
         border: {
           bottom: { style: BorderStyle.SINGLE, size: 6, color: "999999", space: 2 },
         },
@@ -76,13 +79,13 @@ function renderBlock(block: Block): Paragraph {
 
     case "paragraph":
       return new Paragraph({
-        spacing: { after: 80, line: 260 },
+        spacing: { after: tw(SPACE.betweenParagraphs), line: LINE },
         children: [run(block.text, { size: TYPE.body })],
       });
 
     case "skills":
       return new Paragraph({
-        spacing: { after: 50, line: 260 },
+        spacing: { after: tw(SPACE.betweenSkillLines), line: LINE },
         children: [
           run(`${block.category}: `, { bold: true, size: TYPE.body }),
           run(block.skills, { size: TYPE.body }),
@@ -93,7 +96,7 @@ function renderBlock(block: Block): Paragraph {
       return new Paragraph({
         // A right tab stop, not a table — tables break ATS parsers (§6.1).
         tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
-        spacing: { before: 130, after: 20 },
+        spacing: { before: tw(SPACE.beforeRole), after: tw(SPACE.afterRoleHeader) },
         keepNext: true,
         children: [
           run(block.left, { bold: true, size: TYPE.body }),
@@ -103,7 +106,7 @@ function renderBlock(block: Block): Paragraph {
 
     case "roleMeta":
       return new Paragraph({
-        spacing: { after: 40 },
+        spacing: { after: tw(SPACE.afterRoleMeta) },
         keepNext: true,
         children: [run(block.text, { size: TYPE.meta, color: "444444" })],
       });
@@ -111,13 +114,13 @@ function renderBlock(block: Block): Paragraph {
     case "bullet":
       return new Paragraph({
         numbering: { reference: BULLET_REF, level: 0 },
-        spacing: { after: 40, line: 260 },
+        spacing: { after: tw(SPACE.betweenBullets), line: LINE },
         children: [run(block.text, { size: TYPE.body })],
       });
 
     case "labelled":
       return new Paragraph({
-        spacing: { after: 40, line: 260 },
+        spacing: { after: tw(SPACE.betweenBullets), line: LINE },
         children: [
           run(`${block.label}: `, { bold: true, size: TYPE.body }),
           run(block.value, { size: TYPE.body }),

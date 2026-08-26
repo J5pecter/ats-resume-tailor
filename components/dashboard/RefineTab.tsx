@@ -328,6 +328,8 @@ export function RefineTab({
 
                   <EvidenceSummary evidence={outcome.evidence} />
 
+                  <RetentionSummary retention={outcome.retention} />
+
                   {outcome.forbiddenKeywordHits.length ? (
                     <Alert tone="error" title="Gap keywords appeared in the output">
                       {outcome.forbiddenKeywordHits.map((h) => h.term).join(", ")} — you cannot
@@ -439,6 +441,71 @@ function EvidenceSummary({ evidence }: { evidence: TailorOutcome["evidence"] }) 
           </li>
         ))}
       </ul>
+    </Alert>
+  );
+}
+
+/**
+ * What the rewrite left out.
+ *
+ * Trimming for length is legitimate, but it has to be visible: the candidate is
+ * the only one who knows whether a dropped bullet was the one that mattered,
+ * and they can only put it back if they are told it went.
+ */
+function RetentionSummary({ retention }: { retention: TailorOutcome["retention"] }) {
+  if (!retention || retention.dropped.length === 0) {
+    if (!retention || retention.originalBullets === 0) return null;
+    return (
+      <Alert tone="success" title="Nothing was left behind">
+        All {retention.originalBullets} bullets and {retention.originalSkills} skills from
+        your resume are present, reordered for this role.
+      </Alert>
+    );
+  }
+
+  const bullets = retention.dropped.filter((d) => d.kind === "bullet");
+  const skills = retention.dropped.filter((d) => d.kind === "skill");
+  const roles = retention.dropped.filter((d) => d.kind === "role");
+
+  return (
+    <Alert
+      tone={retention.substantialLoss ? "warning" : "info"}
+      title={`${retention.keptBullets} of ${retention.originalBullets} bullets, ${retention.keptSkills} of ${retention.originalSkills} skills kept`}
+    >
+      These were in your resume but are not in the tailored version. If any
+      matter for this role, add them back with the instruction box or by editing
+      the preview directly.
+
+      {roles.length ? (
+        <div className="mt-2">
+          <p className="text-xs font-medium text-foreground">Roles dropped</p>
+          <ul className="mt-1 space-y-1">
+            {roles.map((d, i) => (
+              <li key={i} className="text-xs">{d.text}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {bullets.length ? (
+        <div className="mt-2">
+          <p className="text-xs font-medium text-foreground">Bullets dropped ({bullets.length})</p>
+          <ul className="mt-1 space-y-1">
+            {bullets.map((d, i) => (
+              <li key={i} className="text-xs">
+                <span className="text-muted-foreground">{d.where}</span> — {d.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {skills.length ? (
+        <div className="mt-2">
+          <p className="text-xs font-medium text-foreground">Skills dropped ({skills.length})</p>
+          <p className="mt-1 text-xs">{skills.map((d) => d.text).join(", ")}</p>
+        </div>
+      ) : null}
     </Alert>
   );
 }
