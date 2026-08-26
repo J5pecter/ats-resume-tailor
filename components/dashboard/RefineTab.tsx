@@ -330,8 +330,29 @@ export function RefineTab({
 
                   <RetentionSummary retention={outcome.retention} />
 
+                  {outcome.forbiddenRemoved?.length ? (
+                    <Alert
+                      tone="warning"
+                      title={`${outcome.forbiddenRemoved.length} claim(s) removed for citing a gap keyword`}
+                    >
+                      The rewrite attached a keyword from the missing list to work
+                      your resume does not evidence. Those claims were removed
+                      rather than shipped:
+                      <ul className="mt-1.5 space-y-1">
+                        {outcome.forbiddenRemoved.map((r, i) => (
+                          <li key={i} className="text-xs">
+                            <Badge variant="destructive" className="mr-1.5 align-middle">
+                              {r.term}
+                            </Badge>
+                            <span className="text-muted-foreground">{r.where}</span> — {r.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </Alert>
+                  ) : null}
+
                   {outcome.forbiddenKeywordHits.length ? (
-                    <Alert tone="error" title="Gap keywords appeared in the output">
+                    <Alert tone="error" title="Gap keywords still present">
                       {outcome.forbiddenKeywordHits.map((h) => h.term).join(", ")} — you cannot
                       currently evidence these. Remove them before you send this out.
                     </Alert>

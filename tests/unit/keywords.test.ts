@@ -54,3 +54,51 @@ describe("forbidden keyword guard", () => {
     expect(text).toContain("Languages");
   });
 });
+
+describe("stripping claims that smuggled a gap keyword", () => {
+  it("removes a real bullet that had a gap keyword appended to it", async () => {
+    const { stripForbiddenKeywords } = await import("@/lib/validate/keywords");
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    // The exact live failure: genuine work, genuine evidence, plus a clause the
+    // evidence does not support. Both evidence checks pass on this.
+    doc.experience[0].bullets[0] = {
+      text: "Authored audit reports and coordinated discrepancy resolution, ensuring timely Kubernetes rollout.",
+      keywordsHit: [],
+      sourceEvidence: "Led redesign of digital onboarding journey",
+    };
+
+    const { resume, removed } = stripForbiddenKeywords(doc, analysis);
+    expect(removed).toHaveLength(1);
+    expect(removed[0].term).toBe("Kubernetes");
+    expect(removed[0].kind).toBe("bullet");
+    expect(findForbiddenKeywords(resume, analysis)).toHaveLength(0);
+  });
+
+  it("clears a summary that carries a gap keyword rather than dropping other content", async () => {
+    const { stripForbiddenKeywords } = await import("@/lib/validate/keywords");
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    doc.summary = "Product Manager experienced in Kubernetes and onboarding funnels.";
+
+    const { resume, removed } = stripForbiddenKeywords(doc, analysis);
+    expect(resume.summary).toBe("");
+    expect(removed.some((r) => r.where === "Professional summary")).toBe(true);
+    expect(resume.experience).toHaveLength(SAMPLE_RESUME.experience.length);
+  });
+
+  it("removes a skill that names a gap keyword", async () => {
+    const { stripForbiddenKeywords } = await import("@/lib/validate/keywords");
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    doc.coreSkills[1].skills.push({ name: "Kubernetes", sourceEvidence: "" });
+
+    const { resume, removed } = stripForbiddenKeywords(doc, analysis);
+    expect(removed.some((r) => r.kind === "skill" && r.text === "Kubernetes")).toBe(true);
+    expect(findForbiddenKeywords(resume, analysis)).toHaveLength(0);
+  });
+
+  it("leaves a clean document completely untouched", async () => {
+    const { stripForbiddenKeywords } = await import("@/lib/validate/keywords");
+    const { resume, removed } = stripForbiddenKeywords(SAMPLE_RESUME, analysis);
+    expect(removed).toHaveLength(0);
+    expect(resume).toEqual(SAMPLE_RESUME);
+  });
+});

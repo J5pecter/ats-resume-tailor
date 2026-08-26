@@ -42,6 +42,7 @@ export interface TailorOutcome {
     }[];
   };
   forbiddenKeywordHits: { term: string; where: string }[];
+  forbiddenRemoved?: { kind: "bullet" | "skill"; where: string; text: string; term: string }[];
   retention?: {
     originalBullets: number;
     keptBullets: number;

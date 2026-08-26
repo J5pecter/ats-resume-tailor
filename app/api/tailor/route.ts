@@ -12,7 +12,7 @@ import type { JDProfile } from "@/lib/schema/jd";
 import type { ResumeDoc } from "@/lib/schema/resume";
 import { ResumeDocSchema } from "@/lib/schema/resume";
 import { checkEvidence, stripUnsupported } from "@/lib/validate/evidence";
-import { findForbiddenKeywords } from "@/lib/validate/keywords";
+import { findForbiddenKeywords, stripForbiddenKeywords } from "@/lib/validate/keywords";
 import { sanitiseResumeDoc } from "@/lib/validate/sanitize";
 import { checkRetention } from "@/lib/validate/retention";
 
@@ -72,13 +72,24 @@ export async function POST(req: Request) {
       ? normalised
       : stripUnsupported(normalised, evidence.failures);
 
-    const forbidden = findForbiddenKeywords(cleanedResume, analysis);
+    // Rule 4 is absolute: keywords the gap analysis marked MISSING are honest
+    // gaps and must not appear. Detecting a violation is not enough — the
+    // document would still ship with it — so anything carrying one is removed.
+    //
+    // The evidence check cannot catch these. A model can take a real bullet
+    // with real evidence and append a clause the evidence does not support,
+    // and every traceability test still passes.
+    const { resume: guardedResume, removed: forbiddenRemoved } = stripForbiddenKeywords(
+      cleanedResume,
+      analysis,
+    );
+    const forbidden = findForbiddenKeywords(guardedResume, analysis);
 
     // What did the rewrite leave behind? Trimming is permitted; trimming
     // invisibly is not, because the candidate cannot restore what they cannot see.
-    const retention = checkRetention(originalResume, cleanedResume);
+    const retention = checkRetention(originalResume, guardedResume);
 
-    const contentJson = ResumeDocSchema.parse(cleanedResume);
+    const contentJson = ResumeDocSchema.parse(guardedResume);
 
     const row = await prisma.tailoredResume.create({
       data: {
@@ -117,6 +128,7 @@ export async function POST(req: Request) {
         })),
       },
       forbiddenKeywordHits: forbidden,
+      forbiddenRemoved,
       retention: {
         originalBullets: retention.originalBullets,
         keptBullets: retention.keptBullets,
