@@ -11,7 +11,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { buildBlocks, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
+import { buildBlocks, LINE_HEIGHT, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
 
 /**
  * PDF export (§6.3). Mirrors the DOCX layout block for block — both walk the
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT,
     fontSize: TYPE.body,
     color: "#000000",
-    lineHeight: 1.35,
+    lineHeight: LINE_HEIGHT,
   },
   name: {
     fontFamily: FONT_BOLD,

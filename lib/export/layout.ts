@@ -52,18 +52,24 @@ export const TYPE = {
  * carried its own numbers.
  */
 export const SPACE = {
-  afterName: 2,
-  afterHeadline: 2,
-  afterContact: 11,
-  beforeSection: 11,
-  afterSection: 5,
-  betweenParagraphs: 4,
-  betweenSkillLines: 2.5,
-  beforeRole: 8,
+  // Not merely cosmetic: below roughly 3pt, pdf.js merges the name and the
+  // headline into one run when extracting, so an ATS reads "VYASInternal
+  // Auditor" and loses the surname. The DOCX/PDF agreement test catches this.
+  afterName: 3,
+  afterHeadline: 3,
+  afterContact: 8,
+  beforeSection: 8.5,
+  afterSection: 4,
+  betweenParagraphs: 3,
+  betweenSkillLines: 2,
+  beforeRole: 6,
   afterRoleHeader: 1,
-  afterRoleMeta: 2,
-  betweenBullets: 2.5,
+  afterRoleMeta: 1.5,
+  betweenBullets: 2,
 } as const;
+
+/** Line spacing. Tight enough to fit a junior resume on one page, loose enough to read. */
+export const LINE_HEIGHT = 1.22;
 
 /** 0.6in is the tightest the ATS rules allow, and buys a few more lines of content. */
 export const MARGIN_INCHES = 0.65;
@@ -164,13 +170,16 @@ export function buildBlocks(resume: ResumeDoc): Block[] {
 
   if (resume.certifications?.length) {
     blocks.push({ kind: "section", text: HEADINGS.certifications });
-    for (const cert of resume.certifications) {
-      const detail = [cert.issuer, cert.date].map((d) => (d ?? "").trim()).filter(Boolean);
-      blocks.push({
-        kind: "bullet",
-        text: detail.length ? `${cert.name} (${detail.join(", ")})` : cert.name,
-      });
-    }
+    // One bullet per certification costs a line each and pushes short resumes
+    // onto a second page for no benefit. Run them together instead: an ATS
+    // reads the delimited list just as well, and a reader scans it faster.
+    const certs = resume.certifications
+      .map((cert) => {
+        const detail = [cert.issuer, cert.date].map((d) => (d ?? "").trim()).filter(Boolean);
+        return detail.length ? `${cert.name} (${detail.join(", ")})` : cert.name;
+      })
+      .filter(Boolean);
+    if (certs.length) blocks.push({ kind: "paragraph", text: certs.join("  •  ") });
   }
 
   if (resume.additional?.length) {

@@ -13,7 +13,7 @@ import {
   TextRun,
 } from "docx";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { buildBlocks, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
+import { buildBlocks, LINE_HEIGHT, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
 
 /**
  * DOCX export (§6.2).
@@ -31,7 +31,7 @@ const BULLET_REF = "resume-bullets";
 const hp = (points: number) => Math.round(points * 2);
 const tw = (points: number) => Math.round(points * 20);
 /** Line spacing is expressed in 240ths of a line; 1.15 reads better than single. */
-const LINE = Math.round(240 * 1.15);
+const LINE = Math.round(240 * LINE_HEIGHT);
 const MARGIN_TWIPS = Math.round(MARGIN_INCHES * 1440);
 
 function run(text: string, opts: { bold?: boolean; size: number; color?: string } = { size: TYPE.body }) {
