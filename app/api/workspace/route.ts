@@ -20,12 +20,20 @@ export async function GET() {
   try {
     const userId = await requireUserId();
 
-    const latestTailored = await prisma.tailoredResume.findFirst({
-      where: { userId },
-      orderBy: [{ createdAt: "desc" }],
-    });
+    const [latestTailored, latestJd] = await Promise.all([
+      prisma.tailoredResume.findFirst({ where: { userId }, orderBy: [{ createdAt: "desc" }] }),
+      prisma.jobDescription.findFirst({ where: { userId }, orderBy: [{ createdAt: "desc" }] }),
+    ]);
 
-    if (latestTailored) {
+    // Restore whatever the user touched last, not whatever was last *generated*.
+    // Starting a new job description is the clearest possible signal that the
+    // previous tailored document is finished with; reopening on it instead
+    // would silently hide the work they had just begun.
+    const tailoredIsCurrent =
+      latestTailored !== null &&
+      (latestJd === null || latestTailored.createdAt >= latestJd.createdAt);
+
+    if (tailoredIsCurrent && latestTailored) {
       const [jd, source, analysis] = await Promise.all([
         prisma.jobDescription.findFirst({
           where: { id: latestTailored.jobDescriptionId, userId },
@@ -87,16 +95,17 @@ export async function GET() {
       }
     }
 
-    // No generated document yet — restore whatever inputs exist so the user
-    // does not have to paste the job description again.
-    const jd = await prisma.jobDescription.findFirst({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
+    // Either nothing has been generated yet, or a newer job description has
+    // been started since. Restore the inputs so the job description does not
+    // have to be pasted again.
+    const jd = latestJd;
     if (!jd) return NextResponse.json({ jd: null, resume: null, analysis: null, tailored: null });
 
+    // Only a resume that belongs to this job description's work. A resume left
+    // over from a previous, unrelated tailoring run is not part of it, and
+    // showing it would suggest step two was already done.
     const source = await prisma.sourceResume.findFirst({
-      where: { userId },
+      where: { userId, createdAt: { gte: jd.createdAt } },
       orderBy: { createdAt: "desc" },
     });
     const analysis = source
