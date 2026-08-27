@@ -103,6 +103,17 @@ export function RefineTab({
     );
   }
 
+  const restoredNote = outcome.restored ? (
+    <Alert tone="info" title="Reopened from your last session">
+      This is the version generated on{" "}
+      <strong>{formatGeneratedAt(outcome.restored.generatedAt)}</strong>, not a new
+      one. The dashboard reopens your last result so a refresh cannot lose it.
+      To produce a fresh version, go back to <strong>Resume</strong> and press{" "}
+      <strong>Generate tailored resume</strong> — or refine this one below, which
+      also saves a new version.
+    </Alert>
+  ) : null;
+
   const dirty = JSON.stringify(draft) !== JSON.stringify(outcome.resume);
 
   async function saveEdits() {
@@ -207,6 +218,7 @@ export function RefineTab({
 
   return (
     <div className="space-y-5">
+      {restoredNote}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] xl:items-start">
         {/* ── left: live preview ─────────────────────────────────────── */}
         <div className="space-y-3">
@@ -582,4 +594,19 @@ function RefineFeedback({ feedback }: { feedback: RefineResponse }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Date only, in the reader's locale. The exact minute is noise; what matters
+ * is whether this is from today or from last week.
+ */
+function formatGeneratedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "an earlier session";
+  return date.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

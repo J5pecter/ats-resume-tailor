@@ -70,6 +70,10 @@ export async function GET() {
           resume: { id: source.id, label: source.label, doc: source.parsedJson },
           analysis: analysis?.resultJson ?? latestTailored.analysisJson,
           tailored: {
+            // Says out loud that this was reopened, not produced just now. The
+            // client cannot infer it: the payload is otherwise identical to a
+            // fresh generation's.
+            restored: { generatedAt: new Date(latestTailored.createdAt).toISOString() },
             tailoredResumeId: latestTailored.id,
             version: latestTailored.version,
             resume: resumeDoc,

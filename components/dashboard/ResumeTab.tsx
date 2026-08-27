@@ -42,6 +42,13 @@ export interface TailorOutcome {
     }[];
   };
   forbiddenKeywordHits: { term: string; where: string }[];
+  /**
+   * Present only when this came back from /api/workspace rather than from a
+   * generation in this session. A restored document is indistinguishable from
+   * a fresh one on screen otherwise, and the dashboard opens straight onto it
+   * — which reads as "it just generated" when nothing ran at all.
+   */
+  restored?: { generatedAt: string };
   forbiddenRemoved?: { kind: "bullet" | "skill"; where: string; text: string; term: string }[];
   retention?: {
     originalBullets: number;
@@ -111,7 +118,16 @@ export function ResumeTab({
   }
 
   async function generate() {
-    if (!resume || !jdId) return;
+    // Unreachable as the tabs stand — the button only renders once both exist.
+    // It says so anyway, because a bare `return` here would present as a dead
+    // button if that ever stopped being true, and a dead button is the hardest
+    // kind of failure to report.
+    if (!resume || !jdId) {
+      setError(
+        "Pick a job description and a resume first — both are needed before anything can be rewritten.",
+      );
+      return;
+    }
     setGenerating(true);
     setError(null);
     try {
