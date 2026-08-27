@@ -242,22 +242,25 @@ server-side. GitHub hosts the source — something else has to run it.
 Everything below has a free tier that covers personal use.
 
 **1. A Postgres database.** SQLite is a file on disk, and serverless hosts give
-you an ephemeral filesystem, so the local database will not survive a deploy.
-The schema is already Postgres-compatible — change one line in
-`prisma/schema.prisma`:
-
-```prisma
-datasource db {
-  provider = "postgresql"   // was "sqlite"
-  url      = env("DATABASE_URL")
-}
-```
-
-Create a free database at [Neon](https://neon.tech) or
+you an ephemeral filesystem, so a local database file would be discarded on
+every deploy. Create a free database at [Neon](https://neon.tech) or
 [Supabase](https://supabase.com) and copy its connection string.
 
-**2. Deploy.** Import the repo at [vercel.com/new](https://vercel.com/new). Set
-these environment variables in the project settings:
+You do **not** need to edit the schema. `scripts/prepare-deploy.mjs` runs as
+part of the build and rewrites the datasource to match the connection string it
+is given, so the schema stays in one file rather than being kept in step by
+hand. It runs only on Vercel — a local build is untouched — and if
+`DATABASE_URL` is missing or is not Postgres it fails with a message saying so,
+rather than deploying something broken.
+
+Production is synced with `prisma db push` rather than `migrate deploy`,
+because the committed migrations are SQLite SQL and will not run on Postgres.
+The deployed database therefore has no migration history: fine for an app that
+owns its database outright, worth revisiting if it ever holds data belonging to
+anyone but its owner.
+
+**2. Deploy.** Import the repo at [vercel.com/new](https://vercel.com/new) and
+set these environment variables in the project settings:
 
 | Variable | Value |
 |---|---|
@@ -266,15 +269,9 @@ these environment variables in the project settings:
 | `AUTH_URL` | `https://your-app.vercel.app` |
 | `LLM_PROVIDER` | `groq` |
 | `OPENAI_COMPATIBLE_API_KEY` | your provider key |
-| `OPENAI_COMPATIBLE_BASE_URL` | your provider's endpoint |
-| `OPENAI_COMPATIBLE_MODEL` | your model |
-| `OPENAI_COMPATIBLE_TPM` | your tier's per-minute budget |
-
-Then run the migrations against the new database once:
-
-```bash
-npx prisma migrate deploy
-```
+| `OPENAI_COMPATIBLE_BASE_URL` | `https://api.groq.com/openai/v1` |
+| `OPENAI_COMPATIBLE_MODEL` | `openai/gpt-oss-120b` |
+| `OPENAI_COMPATIBLE_TPM` | `8000` |
 
 **Use a different `AUTH_SECRET` in production than locally.** It signs session
 tokens; sharing it between environments means a session minted on your laptop
