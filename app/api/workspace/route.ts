@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ResumeDocSchema } from "@/lib/schema/resume";
 import { checkEvidence } from "@/lib/validate/evidence";
+import { checkRetention } from "@/lib/validate/retention";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,6 +66,19 @@ export async function GET() {
           ? checkEvidence(restored.data, source.rawText)
           : null;
 
+        // Recomputed here rather than stored alongside the document, for the
+        // same reason evidence is: a stored verdict is a snapshot of the rules
+        // as they were on the day it was written. These rules have already
+        // changed once — kept counts used to measure the output instead of the
+        // survivors — and a persisted number would have carried that error
+        // forward for every document produced before the fix. Both inputs are
+        // already loaded, so recomputing costs nothing and is always current.
+        const originalDoc = ResumeDocSchema.safeParse(source.parsedJson);
+        const retention =
+          restored.success && originalDoc.success
+            ? checkRetention(originalDoc.data, restored.data)
+            : null;
+
         return NextResponse.json({
           jd: { id: jd.id, title: jd.title, profile: jd.parsedJson },
           resume: { id: source.id, label: source.label, doc: source.parsedJson },
@@ -94,6 +108,18 @@ export async function GET() {
               })),
             },
             forbiddenKeywordHits: [],
+            // Absent when either document failed to parse, which the client
+            // already treats as "nothing to report" rather than "nothing lost".
+            retention: retention
+              ? {
+                  originalBullets: retention.originalBullets,
+                  keptBullets: retention.keptBullets,
+                  originalSkills: retention.originalSkills,
+                  keptSkills: retention.keptSkills,
+                  substantialLoss: retention.substantialLoss,
+                  dropped: retention.dropped.slice(0, 30),
+                }
+              : undefined,
           },
         });
       }
