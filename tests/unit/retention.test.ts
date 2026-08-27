@@ -78,6 +78,54 @@ describe("retention check", () => {
     expect(report.substantialLoss).toBe(true);
   });
 
+  it("counts kept items as originals that survived, not as the size of the output", () => {
+    const tailored: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    // Consolidation is legitimate and common: two originals merge into one
+    // entry that cites both. Nothing is lost, so nothing may be reported lost.
+    const [first, second] = tailored.coreSkills[0].skills;
+    tailored.coreSkills[0].skills = [
+      { name: `${first.name} & ${second.name}`, sourceEvidence: first.sourceEvidence },
+      { name: second.name, sourceEvidence: second.sourceEvidence },
+      ...tailored.coreSkills[0].skills.slice(2),
+    ];
+    tailored.coreSkills[0].skills.splice(1, 1);
+
+    const report = checkRetention(SAMPLE_RESUME, tailored);
+    const outputSkills = tailored.coreSkills.reduce((n, g) => n + g.skills.length, 0);
+
+    expect(report.dropped.filter((d) => d.kind === "skill")).toHaveLength(0);
+    // The output is one entry shorter, but no original was lost.
+    expect(outputSkills).toBeLessThan(report.originalSkills);
+    expect(report.keptSkills).toBe(report.originalSkills);
+    expect(report.substantialLoss).toBe(false);
+  });
+
+  it("keeps the headline figure and the dropped list in agreement", () => {
+    const tailored: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    tailored.experience[0].bullets.pop();
+    tailored.coreSkills[1].skills.pop();
+
+    const report = checkRetention(SAMPLE_RESUME, tailored);
+    const droppedBullets = report.dropped.filter((d) => d.kind === "bullet").length;
+    const droppedSkills = report.dropped.filter((d) => d.kind === "skill").length;
+
+    // The UI prints "X of Y kept" beside the list of what went. If those two
+    // can disagree, one of them is lying to the candidate.
+    expect(report.keptBullets).toBe(report.originalBullets - droppedBullets);
+    expect(report.keptSkills).toBe(report.originalSkills - droppedSkills);
+  });
+
+  it("never reports more kept than existed", () => {
+    const tailored: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    // A rewrite may split one original into two. That is still one original.
+    const source = tailored.experience[0].bullets[0];
+    tailored.experience[0].bullets.push({ ...source });
+
+    const report = checkRetention(SAMPLE_RESUME, tailored);
+    expect(report.keptBullets).toBeLessThanOrEqual(report.originalBullets);
+    expect(report.keptSkills).toBeLessThanOrEqual(report.originalSkills);
+  });
+
   it("does not flag a rewrite that merely reorders", () => {
     const tailored: ResumeDoc = structuredClone(SAMPLE_RESUME);
     tailored.experience[0].bullets.reverse();

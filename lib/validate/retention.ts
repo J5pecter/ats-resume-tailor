@@ -27,8 +27,20 @@ export interface DroppedItem {
 export interface RetentionReport {
   dropped: DroppedItem[];
   originalBullets: number;
-  keptBullets: number;
   originalSkills: number;
+  /**
+   * How many of the originals survived — `originalBullets - dropped bullets`,
+   * and the same for skills.
+   *
+   * Deliberately not the size of the tailored document, which is a different
+   * quantity and was what these once held. Tailoring is allowed to consolidate:
+   * "Financial Modeling" and "DCF Valuation" can legitimately merge into one
+   * "Valuation & Modelling" entry that cites both. Counting the output made
+   * that read as two skills lost, so a clean rewrite reported "21 of 28 skills
+   * kept" while naming only four as dropped, and the 25% "substantial loss"
+   * warning fired on a document that had lost nothing.
+   */
+  keptBullets: number;
   keptSkills: number;
   /** True when a meaningful share of the source did not survive. */
   substantialLoss: boolean;
@@ -93,20 +105,24 @@ export function checkRetention(original: ResumeDoc, tailored: ResumeDoc): Retent
     }
   }
 
-  const keptBullets = tailored.experience.reduce((n, e) => n + e.bullets.length, 0);
-  const keptSkills = tailored.coreSkills.reduce((n, g) => n + g.skills.length, 0);
+  // Counted from what was actually lost, so the figure and the list below it
+  // can never disagree. `dropped` is the authority; these are derived from it.
+  const droppedBullets = dropped.filter((d) => d.kind === "bullet").length;
+  const droppedSkills = dropped.filter((d) => d.kind === "skill").length;
+  const keptBullets = originalBullets - droppedBullets;
+  const keptSkills = originalSkills - droppedSkills;
 
   // A short resume has no page pressure, so any loss there is suspect. The
   // thresholds are loose: this flags a document worth a second look, it does
   // not reject anything.
-  const bulletLoss = originalBullets > 0 ? 1 - keptBullets / originalBullets : 0;
-  const skillLoss = originalSkills > 0 ? 1 - keptSkills / originalSkills : 0;
+  const bulletLoss = originalBullets > 0 ? droppedBullets / originalBullets : 0;
+  const skillLoss = originalSkills > 0 ? droppedSkills / originalSkills : 0;
 
   return {
     dropped,
     originalBullets,
-    keptBullets,
     originalSkills,
+    keptBullets,
     keptSkills,
     substantialLoss: bulletLoss > 0.25 || skillLoss > 0.25,
   };
