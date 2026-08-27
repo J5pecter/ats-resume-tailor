@@ -13,7 +13,14 @@ import {
   TextRun,
 } from "docx";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { buildBlocks, LINE_HEIGHT, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
+import {
+  buildBlocks,
+  lineHeightFor,
+  MARGIN_INCHES,
+  spacingFor,
+  TYPE,
+  type Block,
+} from "./layout";
 
 /**
  * DOCX export (§6.2).
@@ -30,8 +37,8 @@ const BULLET_REF = "resume-bullets";
 /** docx sizes are half-points; margins and spacing are twips (1 inch = 1440, 1pt = 20). */
 const hp = (points: number) => Math.round(points * 2);
 const tw = (points: number) => Math.round(points * 20);
-/** Line spacing is expressed in 240ths of a line; 1.15 reads better than single. */
-const LINE = Math.round(240 * LINE_HEIGHT);
+/** docx line spacing is expressed in 240ths of a line. */
+const lineTwips = (height: number) => Math.round(240 * height);
 const MARGIN_TWIPS = Math.round(MARGIN_INCHES * 1440);
 
 function run(text: string, opts: { bold?: boolean; size: number; color?: string } = { size: TYPE.body }) {
@@ -44,7 +51,11 @@ function run(text: string, opts: { bold?: boolean; size: number; color?: string 
   });
 }
 
-function renderBlock(block: Block): Paragraph {
+function renderBlock(
+  block: Block,
+  SPACE: ReturnType<typeof spacingFor>,
+  LINE: number,
+): Paragraph {
   switch (block.kind) {
     case "name":
       return new Paragraph({
@@ -130,6 +141,12 @@ function renderBlock(block: Block): Paragraph {
 }
 
 export async function buildDocx(resume: ResumeDoc, roleTitle: string): Promise<Buffer> {
+  const blocks = buildBlocks(resume);
+  // Same content-driven spacing as the PDF, from the same helpers, so the two
+  // documents stay visually equivalent rather than merely carrying equal text.
+  const space = spacingFor(blocks);
+  const line = lineTwips(lineHeightFor(blocks));
+
   const doc = new Document({
     creator: resume.contact.fullName || "ATS Resume Tailor",
     title: `${resume.contact.fullName} — ${roleTitle}`.trim(),
@@ -169,7 +186,7 @@ export async function buildDocx(resume: ResumeDoc, roleTitle: string): Promise<B
             },
           },
         },
-        children: buildBlocks(resume).map(renderBlock),
+        children: blocks.map((block) => renderBlock(block, space, line)),
       },
     ],
   });

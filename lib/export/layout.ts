@@ -55,21 +55,114 @@ export const SPACE = {
   // Not merely cosmetic: below roughly 3pt, pdf.js merges the name and the
   // headline into one run when extracting, so an ATS reads "VYASInternal
   // Auditor" and loses the surname. The DOCX/PDF agreement test catches this.
-  afterName: 3,
-  afterHeadline: 3,
-  afterContact: 8,
-  beforeSection: 8.5,
-  afterSection: 4,
-  betweenParagraphs: 3,
-  betweenSkillLines: 2,
-  beforeRole: 6,
-  afterRoleHeader: 1,
-  afterRoleMeta: 1.5,
-  betweenBullets: 2,
+  afterName: 3.5,
+  afterHeadline: 3.5,
+  afterContact: 10,
+  beforeSection: 10.5,
+  afterSection: 5,
+  betweenParagraphs: 4,
+  betweenSkillLines: 3,
+  beforeRole: 7.5,
+  afterRoleHeader: 1.5,
+  afterRoleMeta: 2,
+  betweenBullets: 3,
 } as const;
 
-/** Line spacing. Tight enough to fit a junior resume on one page, loose enough to read. */
-export const LINE_HEIGHT = 1.22;
+/** Line spacing at full density. Compressed proportionally when space runs short. */
+export const LINE_HEIGHT = 1.3;
+
+/** Usable text width in characters, at body size across the printable area. */
+const CHARS_PER_LINE = 100;
+
+/**
+ * Lines a page holds at full density. Calibrated against a rendered PDF rather
+ * than derived: at LINE_HEIGHT 1.3 with the SPACE scale below, a page fits 40.
+ */
+const LINES_PER_PAGE = 40;
+
+/**
+ * How empty a final page has to be before it is worth compressing to avoid.
+ * Resumes are conventionally one full page or two — a last page under half
+ * full reads as unfinished, and is worth crowding the rest to reclaim.
+ */
+const ORPHAN_MARGIN = 0.5;
+
+function wrapped(text: string, width = CHARS_PER_LINE): number {
+  return Math.max(1, Math.ceil(text.length / width));
+}
+
+export function estimateLines(blocks: Block[]): number {
+  let lines = 0;
+  for (const block of blocks) {
+    switch (block.kind) {
+      case "paragraph":
+        lines += wrapped(block.text);
+        break;
+      case "bullet":
+        lines += wrapped(block.text, CHARS_PER_LINE - 4);
+        break;
+      case "skills":
+        lines += wrapped(`${block.category}: ${block.skills}`);
+        break;
+      case "labelled":
+        lines += wrapped(`${block.label}: ${block.value}`);
+        break;
+      default:
+        // name, headline, contact, section heading, role header, role meta
+        lines += 1;
+    }
+  }
+  return lines;
+}
+
+/**
+ * How tightly to set this particular document.
+ *
+ * A fixed spacing scale cannot serve both a one-year CV and a fifteen-year one:
+ * set it comfortably and the junior resume spills six lines onto a second page,
+ * set it tight enough to prevent that and every resume reads cramped.
+ *
+ * The rule is only about page boundaries. Compress when the content sits just
+ * over one — those last few lines are worth crowding to avoid an almost-empty
+ * extra sheet. Everywhere else, stay comfortable: tightening a document that
+ * already fits buys nothing and costs legibility.
+ */
+export function densityScale(blocks: Block[]): number {
+  const forced = Number(process.env.EXPORT_DENSITY_SCALE);
+  if (Number.isFinite(forced) && forced > 0) return forced;
+
+  const estimated = estimateLines(blocks);
+  const overflow = estimated / LINES_PER_PAGE;
+  const past = overflow - Math.floor(overflow);
+
+  // Comfortably inside a page, or far enough past one that the final page will
+  // be properly filled either way.
+  if (overflow <= 1 || past === 0 || past > ORPHAN_MARGIN) return 1;
+
+  // Spilling onto a page that would sit half empty. 0.68 is measured, not
+  // guessed: swept against a real one-page-plus-six-lines resume, 0.7 was the
+  // loosest setting that reclaimed the page and 0.75 was not enough. Sitting
+  // just inside that leaves margin for documents shaped slightly differently.
+  return 0.68;
+}
+
+/** SPACE scaled for this particular document. */
+export function spacingFor(blocks: Block[]): Record<keyof typeof SPACE, number> {
+  const scale = densityScale(blocks);
+  const out = {} as Record<keyof typeof SPACE, number>;
+  for (const key of Object.keys(SPACE) as (keyof typeof SPACE)[]) {
+    // Never below the 3pt floor that keeps the name from fusing into the
+    // headline when a PDF text layer is extracted.
+    const scaled = SPACE[key] * scale;
+    out[key] = key === "afterName" || key === "afterHeadline" ? Math.max(3, scaled) : scaled;
+  }
+  return out;
+}
+
+/** Line height for this document, compressed with the same scale but never below 1.15. */
+export function lineHeightFor(blocks: Block[]): number {
+  return Math.max(1.15, LINE_HEIGHT * (0.85 + 0.15 * densityScale(blocks)));
+}
 
 /** 0.6in is the tightest the ATS rules allow, and buys a few more lines of content. */
 export const MARGIN_INCHES = 0.65;

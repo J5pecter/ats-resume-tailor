@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: typecheck, lint, test, build
+    runs-on: ubuntu-latest
+
+    env:
+      # The suite runs with no API key and no network: every guard under test
+      # is pure logic over fixtures. These exist only so the app's config
+      # loader has something valid to read.
+      DATABASE_URL: "file:./ci.db"
+      AUTH_SECRET: "ci-only-not-a-real-secret"
+      LLM_PROVIDER: "groq"
+      OPENAI_COMPATIBLE_API_KEY: "ci-placeholder"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The client is generated, not committed, so nothing type-checks without it.
+      - run: npx prisma generate
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

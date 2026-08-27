@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { buildDocx } from "@/lib/export/docx";
 import { buildPdf } from "@/lib/export/pdf";
-import { HEADINGS, buildBlocks, formatDateRange } from "@/lib/export/layout";
+import {
+  HEADINGS,
+  buildBlocks,
+  densityScale,
+  estimateLines,
+  formatDateRange,
+  lineHeightFor,
+  spacingFor,
+} from "@/lib/export/layout";
 import { SAMPLE_RESUME } from "../fixtures/resume";
+import type { ResumeDoc } from "@/lib/schema/resume";
 
 const ROLE = "Senior Product Manager";
 
@@ -128,5 +137,48 @@ describe("DOCX and PDF agree", () => {
         .map((w) => w.toLowerCase());
 
     expect(words(pdf)).toEqual(words(docx));
+  });
+});
+
+describe("density adapts to the document", () => {
+  it("leaves a document that already fits at full comfort", () => {
+    const scale = densityScale(buildBlocks(SAMPLE_RESUME));
+    expect(scale).toBe(1);
+    expect(lineHeightFor(buildBlocks(SAMPLE_RESUME))).toBeCloseTo(1.3, 2);
+  });
+
+  /** Grows a resume until its estimated line count reaches a target. */
+  function resumeOfLines(targetLines: number): ResumeDoc {
+    const doc: ResumeDoc = structuredClone(SAMPLE_RESUME);
+    doc.experience[0].bullets = [doc.experience[0].bullets[0]];
+    while (estimateLines(buildBlocks(doc)) < targetLines) {
+      doc.experience[0].bullets.push({
+        text: "Performed control testing across branch operations and documented the findings.",
+        keywordsHit: [],
+        sourceEvidence: "Led redesign of digital onboarding journey",
+      });
+    }
+    return doc;
+  }
+
+  it("compresses a document that would spill a few lines onto a second page", () => {
+    // A handful of lines past one page — the nearly-empty second sheet.
+    const spilling = resumeOfLines(45);
+    expect(densityScale(buildBlocks(spilling))).toBeLessThan(1);
+  });
+
+  it("leaves a document alone when its final page fills properly", () => {
+    // Well past the boundary: the last page has real content on it either way,
+    // so crowding the whole document buys nothing.
+    const genuinelyTwoPages = resumeOfLines(65);
+    expect(densityScale(buildBlocks(genuinelyTwoPages))).toBe(1);
+  });
+
+  it("never compresses the name below the PDF text-extraction floor", () => {
+    // Below ~3pt, pdf.js merges the name into the headline when extracting and
+    // an ATS loses the surname.
+    const spacing = spacingFor(buildBlocks(resumeOfLines(45)));
+    expect(spacing.afterName).toBeGreaterThanOrEqual(3);
+    expect(spacing.afterHeadline).toBeGreaterThanOrEqual(3);
   });
 });

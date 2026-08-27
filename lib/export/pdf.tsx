@@ -11,7 +11,14 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { buildBlocks, LINE_HEIGHT, MARGIN_INCHES, SPACE, TYPE, type Block } from "./layout";
+import {
+  buildBlocks,
+  lineHeightFor,
+  MARGIN_INCHES,
+  spacingFor,
+  TYPE,
+  type Block,
+} from "./layout";
 
 /**
  * PDF export (§6.3). Mirrors the DOCX layout block for block — both walk the
@@ -35,7 +42,8 @@ Font.registerHyphenationCallback((word) => [word]);
 const PT_PER_INCH = 72;
 const MARGIN = MARGIN_INCHES * PT_PER_INCH;
 
-const styles = StyleSheet.create({
+function makeStyles(SPACE: ReturnType<typeof spacingFor>, LINE_HEIGHT: number) {
+  return StyleSheet.create({
   page: {
     paddingTop: MARGIN,
     paddingBottom: MARGIN,
@@ -96,9 +104,12 @@ const styles = StyleSheet.create({
   labelledRow: { flexDirection: "row", marginBottom: SPACE.betweenBullets },
   labelledLabel: { fontFamily: FONT_BOLD, fontSize: TYPE.body },
   labelledValue: { fontSize: TYPE.body, flex: 1 },
-});
+  });
+}
 
-function BlockView({ block }: { block: Block }) {
+type Styles = ReturnType<typeof makeStyles>;
+
+function BlockView({ block, styles }: { block: Block; styles: Styles }) {
   switch (block.kind) {
     case "name":
       return <Text style={styles.name}>{block.text}</Text>;
@@ -171,7 +182,11 @@ export function ResumePdf({
   resume: ResumeDoc;
   roleTitle: string;
 }) {
-  const groups = groupForPaging(buildBlocks(resume));
+  const blocks = buildBlocks(resume);
+  // Spacing is chosen from the content: roomy when the document has room,
+  // compressed only as far as avoiding an orphan page requires.
+  const styles = makeStyles(spacingFor(blocks), lineHeightFor(blocks));
+  const groups = groupForPaging(blocks);
 
   return (
     <Document
@@ -190,11 +205,11 @@ export function ResumePdf({
             <View key={gi}>
               <View wrap={false}>
                 {anchor.map((block, bi) => (
-                  <BlockView key={bi} block={block} />
+                  <BlockView key={bi} block={block} styles={styles} />
                 ))}
               </View>
               {rest.map((block, bi) => (
-                <BlockView key={`r${bi}`} block={block} />
+                <BlockView key={`r${bi}`} block={block} styles={styles} />
               ))}
             </View>
           );
