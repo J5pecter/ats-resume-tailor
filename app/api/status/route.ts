@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth, googleEnabled } from "@/lib/auth";
+import { signupCodeRequired } from "@/lib/signupGate";
 import { activeModel, activeProvider, missingKeyMessage, providerReady } from "@/lib/llm/providers";
 import { generationLimit, generationsRemaining } from "@/lib/rateLimit";
 import { routeError } from "@/lib/api";
@@ -32,6 +33,7 @@ export async function GET() {
     return NextResponse.json({
       llm: { provider, model, ready, hint },
       googleEnabled: googleEnabled(),
+      signupCodeRequired: signupCodeRequired(),
       quota: session?.user?.id
         ? { remaining: await generationsRemaining(session.user.id), limit: generationLimit() }
         : null,

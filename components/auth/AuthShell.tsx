@@ -13,7 +13,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { postJson } from "@/lib/client/api";
 
-export function AuthShell({ googleEnabled }: { googleEnabled: boolean }) {
+export function AuthShell({
+  googleEnabled,
+  signupCodeRequired,
+}: {
+  googleEnabled: boolean;
+  signupCodeRequired: boolean;
+}) {
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-10">
       <div className="grid w-full max-w-5xl gap-10 lg:grid-cols-[1.05fr_minmax(0,26rem)] lg:items-center">
@@ -26,10 +32,18 @@ export function AuthShell({ googleEnabled }: { googleEnabled: boolean }) {
                 <TabsTrigger value="login">Log in</TabsTrigger>
               </TabsList>
               <TabsContent value="signup">
-                <CredentialsForm mode="signup" googleEnabled={googleEnabled} />
+                <CredentialsForm
+                  mode="signup"
+                  googleEnabled={googleEnabled}
+                  signupCodeRequired={signupCodeRequired}
+                />
               </TabsContent>
               <TabsContent value="login">
-                <CredentialsForm mode="login" googleEnabled={googleEnabled} />
+                <CredentialsForm
+                  mode="login"
+                  googleEnabled={googleEnabled}
+                  signupCodeRequired={signupCodeRequired}
+                />
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -97,14 +111,17 @@ function Feature({
 function CredentialsForm({
   mode,
   googleEnabled,
+  signupCodeRequired,
 }: {
   mode: "signup" | "login";
   googleEnabled: boolean;
+  signupCodeRequired: boolean;
 }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [signupCode, setSignupCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -115,7 +132,7 @@ function CredentialsForm({
 
     try {
       if (mode === "signup") {
-        await postJson("/api/auth/register", { fullName, email, password });
+        await postJson("/api/auth/register", { fullName, email, password, signupCode });
       }
 
       const result = await signIn("credentials", { email, password, redirect: false });
@@ -178,6 +195,23 @@ function CredentialsForm({
           placeholder="At least 8 characters"
         />
       </div>
+
+      {mode === "signup" && signupCodeRequired ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="signup-code">Signup code</Label>
+          <Input
+            id="signup-code"
+            required
+            value={signupCode}
+            onChange={(e) => setSignupCode(e.target.value)}
+            placeholder="Ask the owner of this instance"
+          />
+          <p className="text-xs text-muted-foreground">
+            This instance is invite-only: accounts share its API key and its
+            database.
+          </p>
+        </div>
+      ) : null}
 
       {error ? <Alert tone="error">{error}</Alert> : null}
 

@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { signupCodeMatches, signupCodeRequired } from "@/lib/signupGate";
 
 /**
  * NextAuth v5, JWT sessions (§2).
@@ -17,7 +18,14 @@ import { prisma } from "@/lib/prisma";
  * own User table, which keeps the schema exactly as specified in §3.
  */
 
+export { signupCodeMatches, signupCodeRequired };
+
 export const BCRYPT_COST = 12;
+
+/** The Google button appears only when a client is configured for it. */
+export function googleEnabled(): boolean {
+  return Boolean(process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim());
+}
 
 export const CredentialsSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address."),
@@ -26,11 +34,9 @@ export const CredentialsSchema = z.object({
 
 export const SignUpSchema = CredentialsSchema.extend({
   fullName: z.string().trim().min(1, "Enter your name.").max(120),
+  /** Only checked when SIGNUP_CODE is set — see signupCodeRequired(). */
+  signupCode: z.string().optional(),
 });
-
-export function googleEnabled(): boolean {
-  return Boolean(process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim());
-}
 
 const providers: NextAuthConfig["providers"] = [
   Credentials({
