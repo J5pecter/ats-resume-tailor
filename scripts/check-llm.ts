@@ -16,6 +16,7 @@ async function main() {
   const { activeModel, activeProvider, providerReady, missingKeyMessage } = await import(
     "../lib/llm/providers"
   );
+  const { resolveChain, describeEndpoint } = await import("../lib/llm/endpoints");
   const { callStructured } = await import("../lib/llm/client");
   const { jdParserPrompt } = await import("../lib/prompts/jdParser");
   const { resumeParserPrompt } = await import("../lib/prompts/resumeParser");
@@ -24,6 +25,18 @@ async function main() {
   const provider = activeProvider();
   console.log(`provider : ${provider}`);
   console.log(`model    : ${activeModel(provider)}\n`);
+
+  // The whole point of a spare is that you find out it is broken now, rather
+  // than at the moment the primary stops working.
+  const chain = resolveChain();
+  const spares = chain.endpoints.filter((e) => e.name !== "primary");
+  console.log(
+    `fallbacks: ${spares.length ? spares.map(describeEndpoint).join(", ") : "none configured"}`,
+  );
+  for (const { endpoint, reason } of chain.skipped) {
+    console.log(`  skipped  ${describeEndpoint(endpoint)} - ${reason}`);
+  }
+  console.log("");
 
   if (!providerReady(provider)) {
     console.error(missingKeyMessage(provider));

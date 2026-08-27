@@ -3,6 +3,10 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 
+// Type-only: erased at compile time, so the runtime dependency runs one way
+// (endpoints -> providers) and there is no import cycle.
+import type { LlmEndpoint } from "./endpoints";
+
 /**
  * Provider adapter.
  *
@@ -117,8 +121,12 @@ export function compatibleBaseUrl(): string {
  * changes three things downstream: no auth header, no token budgeting, and no
  * rate-limit handling — so it is worth detecting explicitly.
  */
-export function isLocalEndpoint(baseUrl = compatibleBaseUrl()): boolean {
+export function isLocalUrl(baseUrl: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/i.test(baseUrl);
+}
+
+export function isLocalEndpoint(baseUrl = compatibleBaseUrl()): boolean {
+  return isLocalUrl(baseUrl);
 }
 
 export function activeModel(provider: ProviderName = activeProvider()): string {
@@ -152,21 +160,27 @@ export function missingKeyMessage(provider: ProviderName = activeProvider()): st
     case "gemini":
       return "GOOGLE_API_KEY is not set. Get a free key at https://aistudio.google.com/apikey, add it to .env.local and restart the dev server.";
     case "groq":
-      return `OPENAI_COMPATIBLE_API_KEY is not set for ${compatibleBaseUrl()}. Free keys: https://cloud.cerebras.ai (highest free limits) or https://console.groq.com/keys. Add the key to .env.local and restart the dev server.`;
+      return `OPENAI_COMPATIBLE_API_KEY is not set for ${compatibleBaseUrl()}. Get a free key at https://console.groq.com/keys, add it to .env.local and restart the dev server. A local Ollama needs no key at all — point OPENAI_COMPATIBLE_BASE_URL at http://localhost:11434/v1.`;
   }
 }
 
 // ─────────────────────────── anthropic ───────────────────────────
 
-let anthropicClient: Anthropic | null = null;
+// Keyed by credential rather than a single singleton: a chain may hold more
+// than one endpoint for the same provider.
+const anthropicClients = new Map<string, Anthropic>();
 
-async function callAnthropic(req: LlmRequest): Promise<LlmRawResponse> {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+async function callAnthropic(e: LlmEndpoint, req: LlmRequest): Promise<LlmRawResponse> {
+  const apiKey = e.apiKey;
   if (!apiKey) throw new LlmConfigError(missingKeyMessage("anthropic"));
-  anthropicClient ??= new Anthropic({ apiKey });
+  let client = anthropicClients.get(apiKey);
+  if (!client) {
+    client = new Anthropic({ apiKey });
+    anthropicClients.set(apiKey, client);
+  }
 
-  const model = activeModel("anthropic");
-  const res = await anthropicClient.messages.create(
+  const model = e.model;
+  const res = await client.messages.create(
     {
       model,
       max_tokens: req.maxTokens,
@@ -196,17 +210,21 @@ async function callAnthropic(req: LlmRequest): Promise<LlmRawResponse> {
 
 // ──────────────────────────── gemini ─────────────────────────────
 
-let geminiClient: GoogleGenAI | null = null;
+const geminiClients = new Map<string, GoogleGenAI>();
 
-async function callGemini(req: LlmRequest): Promise<LlmRawResponse> {
-  const apiKey = (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY || "").trim();
+async function callGemini(e: LlmEndpoint, req: LlmRequest): Promise<LlmRawResponse> {
+  const apiKey = e.apiKey;
   if (!apiKey) throw new LlmConfigError(missingKeyMessage("gemini"));
-  geminiClient ??= new GoogleGenAI({ apiKey });
+  let client = geminiClients.get(apiKey);
+  if (!client) {
+    client = new GoogleGenAI({ apiKey });
+    geminiClients.set(apiKey, client);
+  }
 
-  const model = activeModel("gemini");
+  const model = e.model;
   // Gemini has no assistant prefill, but responseMimeType is a harder guarantee:
   // the decoder itself is constrained to JSON.
-  const res = await geminiClient.models.generateContent({
+  const res = await client.models.generateContent({
     model,
     contents: [{ role: "user", parts: [{ text: req.user }] }],
     config: {
@@ -245,11 +263,6 @@ async function callGemini(req: LlmRequest): Promise<LlmRawResponse> {
  * 413 before a single token is generated. So the reservation is trimmed to fit
  * the remaining budget rather than requested optimistically.
  */
-function tokenBudget(): number {
-  const raw = Number(process.env.OPENAI_COMPATIBLE_TPM ?? 8000);
-  return Number.isFinite(raw) && raw > 0 ? raw : 8000;
-}
-
 /** Rough but deliberately pessimistic: English JSON runs about 3.6 chars/token. */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3.6);
@@ -267,16 +280,16 @@ function parseRetryAfter(res: Response, body: string): number {
   return 20;
 }
 
-async function callOpenAiCompatible(req: LlmRequest): Promise<LlmRawResponse> {
-  const baseUrl = compatibleBaseUrl();
-  const local = isLocalEndpoint(baseUrl);
-  const apiKey = process.env.OPENAI_COMPATIBLE_API_KEY?.trim();
+async function callOpenAiCompatible(e: LlmEndpoint, req: LlmRequest): Promise<LlmRawResponse> {
+  const baseUrl = e.baseUrl;
+  const local = e.local;
+  const apiKey = e.apiKey;
   if (!apiKey && !local) throw new LlmConfigError(missingKeyMessage("groq"));
-  const model = activeModel("groq");
+  const model = e.model;
 
   // Nothing is metered on a model you are running yourself, so the reservation
   // can simply be what the prompt asked for.
-  const budget = local ? Number.POSITIVE_INFINITY : tokenBudget();
+  const budget = local ? Number.POSITIVE_INFINITY : e.tpm;
   const promptTokens = estimateTokens(req.system) + estimateTokens(req.user);
   // Leave a little slack: our estimate is not the provider's tokeniser.
   const headroom = budget - promptTokens - 200;
@@ -368,13 +381,17 @@ async function callOpenAiCompatible(req: LlmRequest): Promise<LlmRawResponse> {
   };
 }
 
-export function callProvider(req: LlmRequest): Promise<LlmRawResponse> {
-  switch (activeProvider()) {
+/**
+ * Send one request to one endpoint. Knows nothing about fallbacks: choosing
+ * which endpoint to try, and when to give up on it, belongs to the caller.
+ */
+export function callEndpoint(e: LlmEndpoint, req: LlmRequest): Promise<LlmRawResponse> {
+  switch (e.provider) {
     case "anthropic":
-      return callAnthropic(req);
+      return callAnthropic(e, req);
     case "gemini":
-      return callGemini(req);
+      return callGemini(e, req);
     case "groq":
-      return callOpenAiCompatible(req);
+      return callOpenAiCompatible(e, req);
   }
 }

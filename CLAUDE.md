@@ -73,6 +73,21 @@ skills carried evidence still parse.
 - A metered provider (currently only `anthropic`) throws at startup unless
   `ALLOW_PAID_PROVIDERS=true`. This build is required to cost nothing, and the
   failure worth preventing is silent spend after an absent-minded env change.
+  The same gate runs over the fallback chain, so an outage can never be the
+  thing that starts a bill.
+- `lib/llm/endpoints.ts` resolves an ordered chain, not a single provider.
+  A free tier is not a promise anyone made us — keys get revoked, limits get
+  tightened, hosts go down — so `callAcrossChain` in `client.ts` retries the
+  next endpoint on any failure. Any failure, deliberately: everything reaching
+  that layer has already exhausted the per-endpoint rate-limit wait and the
+  one-off reservation growth, and every remaining free-tier failure mode is
+  endpoint-specific rather than a statement about the request. Guessing wrong
+  costs one wasted call; being clever costs the outage.
+- A chain of one rethrows the original error untouched, so adding chains
+  changed nothing for an install that does not use them. On exhaustion the
+  error *class* is preserved — `routeError` maps it to the HTTP status, and
+  flattening a 429 into a generic failure would report a recoverable pause as
+  a broken app.
 - Every data route checks session AND row ownership via `lib/ownership.ts`.
 - Never log resume or JD content. `LlmCall` stores counts and timings only.
 
@@ -89,7 +104,7 @@ npm run typecheck    # tsc --noEmit
 npm run db:migrate   # prisma migrate dev
 npm run db:studio    # prisma studio
 npm run demo:seed -- you@example.com   # seed a tailored workspace, no model calls
-npm run llm:check    # run JD_PARSER, RESUME_PARSER, GAP_ANALYSIS against the live provider
+npm run llm:check    # resolve the endpoint chain, then run three prompts against it
 RUN_LLM_E2E=1 npm run test:e2e   # include the generative steps in the E2E run
 ```
 

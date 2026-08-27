@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth, googleEnabled } from "@/lib/auth";
 import { signupCodeRequired } from "@/lib/signupGate";
 import { activeModel, activeProvider, missingKeyMessage, providerReady } from "@/lib/llm/providers";
+import { resolveChain } from "@/lib/llm/endpoints";
 import { generationLimit, generationsRemaining } from "@/lib/rateLimit";
 import { routeError } from "@/lib/api";
 
@@ -16,6 +17,8 @@ export async function GET() {
     let ready: boolean;
     let model: string;
     let hint: string | null = null;
+    // Names only — never a key, and never the URL of a private endpoint.
+    let fallbacks: string[] = [];
 
     try {
       const p = activeProvider();
@@ -23,6 +26,11 @@ export async function GET() {
       ready = providerReady(p);
       model = activeModel(p);
       if (!ready) hint = missingKeyMessage(p);
+      // A spare you believe you have and do not is worse than no spare, so the
+      // ones that actually resolved are reported rather than the ones listed.
+      fallbacks = resolveChain()
+        .endpoints.filter((e) => e.name !== "primary")
+        .map((e) => e.name);
     } catch (err) {
       provider = process.env.LLM_PROVIDER ?? "gemini";
       ready = false;
@@ -31,7 +39,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      llm: { provider, model, ready, hint },
+      llm: { provider, model, ready, hint, fallbacks },
       googleEnabled: googleEnabled(),
       signupCodeRequired: signupCodeRequired(),
       quota: session?.user?.id

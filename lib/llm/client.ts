@@ -4,16 +4,18 @@ import type { ZodType } from "zod";
 import { prisma } from "@/lib/prisma";
 import { parseJsonLoose } from "./json";
 import {
-  activeModel,
-  activeProvider,
-  callProvider,
+  callEndpoint,
   LlmCallError,
   LlmConfigError,
   LlmRateLimitError,
   LlmTruncatedError,
-  providerReady,
-  missingKeyMessage,
 } from "./providers";
+import {
+  describeEndpoint,
+  resolveChain,
+  type LlmEndpoint,
+  type ResolvedChain,
+} from "./endpoints";
 
 export { LlmCallError, LlmConfigError, LlmRateLimitError };
 
@@ -81,10 +83,12 @@ export interface StructuredCallResult<T> {
 export async function callStructured<T>(
   opts: StructuredCallOptions<T>,
 ): Promise<StructuredCallResult<T>> {
-  const provider = activeProvider();
-  if (!providerReady(provider)) throw new LlmConfigError(missingKeyMessage(provider));
+  const chain = resolveChain();
+  if (chain.endpoints.length === 0) throw new LlmConfigError(noUsableEndpoint(chain));
 
-  const model = activeModel(provider);
+  // Which endpoint answered is not known until one does. Seeded with the
+  // primary so a failure before the first response still logs something true.
+  let served: LlmEndpoint = chain.endpoints[0];
   const temperature = opts.temperature ?? 0.2;
   const maxTokens = opts.maxTokens ?? 4096;
   const thinking = opts.thinking ?? false;
@@ -98,13 +102,15 @@ export async function callStructured<T>(
 
   try {
     for (attempts = 1; attempts <= 2; attempts++) {
-      const res = await callOnce({
+      const attempt = await callAcrossChain(chain, {
         system: opts.system,
         user,
         maxTokens,
         temperature,
         thinking,
       });
+      const res = attempt.res;
+      served = attempt.endpoint;
       const raw = res.text;
       inputTokens += res.inputTokens;
       outputTokens += res.outputTokens;
@@ -122,8 +128,8 @@ export async function callStructured<T>(
       if (result.success) {
         await logCall(opts.userId, {
           promptName: opts.promptName,
-          provider,
-          model,
+          provider: served.provider,
+          model: served.model,
           inputTokens,
           outputTokens,
           latencyMs: Date.now() - started,
@@ -135,8 +141,8 @@ export async function callStructured<T>(
           raw,
           meta: {
             promptName: opts.promptName,
-            provider,
-            model,
+            provider: served.provider,
+            model: served.model,
             inputTokens,
             outputTokens,
             latencyMs: Date.now() - started,
@@ -158,8 +164,8 @@ export async function callStructured<T>(
   } catch (err) {
     await logCall(opts.userId, {
       promptName: opts.promptName,
-      provider,
-      model,
+      provider: served.provider,
+      model: served.model,
       inputTokens,
       outputTokens,
       latencyMs: Date.now() - started,
@@ -181,13 +187,16 @@ export const callClaude = callStructured;
  * model being slow, and charging it against the response deadline would turn a
  * recoverable stall into a failure.
  */
-async function callOnce(req: {
-  system: string;
-  user: string;
-  maxTokens: number;
-  temperature: number;
-  thinking: boolean;
-}) {
+async function callOnce(
+  e: LlmEndpoint,
+  req: {
+    system: string;
+    user: string;
+    maxTokens: number;
+    temperature: number;
+    thinking: boolean;
+  },
+) {
   let waitedSeconds = 0;
   let maxTokens = req.maxTokens;
   let grownOnce = false;
@@ -197,7 +206,7 @@ async function callOnce(req: {
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
     try {
-      return await callProvider({ ...req, maxTokens, signal: controller.signal });
+      return await callEndpoint(e, { ...req, maxTokens, signal: controller.signal });
     } catch (err) {
       if (err instanceof LlmConfigError) throw err;
 
@@ -244,6 +253,98 @@ async function callOnce(req: {
       clearTimeout(timer);
     }
   }
+}
+
+/**
+ * Try each endpoint in turn until one answers.
+ *
+ * Everything that reaches here has already exhausted the per-endpoint recovery
+ * in `callOnce` — the rate-limit wait and the one-off reservation growth. So a
+ * failure at this level means that endpoint is not going to serve this request,
+ * and the only question left is whether another one might.
+ *
+ * The answer is nearly always yes, because the failures a free tier actually
+ * produces are all endpoint-specific: a revoked key, a suspended account, a
+ * per-minute budget that belongs to that provider, a request too large for that
+ * tier, an outage at that host. None of them say anything about the request
+ * itself. So any error moves to the next endpoint rather than being classified
+ * — a wrong guess here costs one wasted call, while being too clever costs the
+ * outage this exists to prevent.
+ *
+ * With a single endpoint configured, the original error is rethrown untouched:
+ * a chain of one must behave exactly as it did before there were chains.
+ */
+async function callAcrossChain(
+  chain: ResolvedChain,
+  req: {
+    system: string;
+    user: string;
+    maxTokens: number;
+    temperature: number;
+    thinking: boolean;
+  },
+): Promise<{ res: Awaited<ReturnType<typeof callOnce>>; endpoint: LlmEndpoint }> {
+  const failures: { endpoint: LlmEndpoint; error: unknown }[] = [];
+
+  for (const [index, endpoint] of chain.endpoints.entries()) {
+    try {
+      const res = await callOnce(endpoint, req);
+      if (index > 0) {
+        console.info(`[llm] served by fallback ${describeEndpoint(endpoint)}`);
+      }
+      return { res, endpoint };
+    } catch (err) {
+      failures.push({ endpoint, error: err });
+      const remaining = chain.endpoints.length - index - 1;
+      if (remaining > 0) {
+        console.warn(
+          `[llm] ${describeEndpoint(endpoint)} failed (${(err as Error).message}); ` +
+            `falling back, ${remaining} endpoint(s) left`,
+        );
+      }
+    }
+  }
+
+  throw chainFailure(failures);
+}
+
+/**
+ * Collapse a whole failed chain into one error.
+ *
+ * The class is load-bearing, not decorative: `routeError` maps it to the HTTP
+ * status, so flattening everything into a generic call error would turn a
+ * recoverable 429 into something the UI reports as broken. When every endpoint
+ * ran out of budget, that is still a rate limit and is re-thrown as one.
+ */
+function chainFailure(failures: { endpoint: LlmEndpoint; error: unknown }[]): unknown {
+  if (failures.length === 1) return failures[0].error;
+
+  const rateLimits = failures.filter((f) => f.error instanceof LlmRateLimitError);
+  if (rateLimits.length === failures.length) {
+    const worst = rateLimits
+      .map((f) => f.error as LlmRateLimitError)
+      .reduce((a, b) => (a.retryAfterSeconds <= b.retryAfterSeconds ? a : b));
+    return new LlmRateLimitError(
+      `Every configured model endpoint is out of budget. The soonest is ready in about ${worst.retryAfterSeconds} seconds.`,
+      worst.retryAfterSeconds,
+    );
+  }
+
+  const detail = failures
+    .map((f) => `${describeEndpoint(f.endpoint)} — ${(f.error as Error).message}`)
+    .join("; ");
+  return new LlmCallError(`All ${failures.length} model endpoints failed. ${detail}`);
+}
+
+/** Setup guidance when the chain resolved to nothing usable. */
+function noUsableEndpoint(chain: ResolvedChain): string {
+  if (chain.skipped.length === 0) {
+    return "No model endpoint is configured. Set LLM_PROVIDER and its API key in .env.local.";
+  }
+  const reasons = chain.skipped
+    .map((s) => `${describeEndpoint(s.endpoint)} — ${s.reason}`)
+    .join("; ");
+  return `No usable model endpoint. ${reasons}`;
 }
 
 function retryTurn(originalUser: string, problem: string): string {

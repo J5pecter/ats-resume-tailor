@@ -272,6 +272,8 @@ set these environment variables in the project settings:
 | `OPENAI_COMPATIBLE_BASE_URL` | `https://api.groq.com/openai/v1` |
 | `OPENAI_COMPATIBLE_MODEL` | `openai/gpt-oss-120b` |
 | `OPENAI_COMPATIBLE_TPM` | `8000` |
+| `LLM_FALLBACKS` | `smaller` — optional spare, see below |
+| `LLM_SMALLER_MODEL` | `openai/gpt-oss-20b` |
 
 **Use a different `AUTH_SECRET` in production than locally.** It signs session
 tokens; sharing it between environments means a session minted on your laptop
@@ -298,6 +300,46 @@ keep their accounts. To lock things down completely, run it locally with
 
 Ollama cannot be used from a deployed app: it runs on your machine, not the
 server. Local model, local app.
+
+## Staying free when a free tier changes its mind
+
+Nothing here costs money today, and two separate mechanisms keep it that way.
+
+**It cannot start spending by accident.** A provider that bills per token
+refuses to run unless `ALLOW_PAID_PROVIDERS=true`. That applies to the primary
+and to every spare, so an outage can never be the thing that quietly starts a
+bill — the app fails instead, which is the correct behaviour for a build whose
+premise is that it costs nothing.
+
+**It survives a tier disappearing.** A free tier is not a promise anyone made
+you: keys get revoked, limits get tightened, accounts get suspended, hosts go
+down. None of that can be prevented from here, but it can be made survivable.
+`LLM_FALLBACKS` lists spare endpoints, tried in order when the primary fails,
+before the user sees an error:
+
+```
+LLM_FALLBACKS=smaller,ollama
+LLM_SMALLER_MODEL=openai/gpt-oss-20b          # same key, smaller model
+LLM_OLLAMA_BASE_URL=http://localhost:11434/v1 # your own machine
+LLM_OLLAMA_MODEL=qwen2.5:7b-instruct
+```
+
+Each name gets variables prefixed `LLM_<NAME>_`; anything unset inherits the
+primary's value, so a spare on the same account is two lines. `.env.example`
+documents every field.
+
+Worth being clear about what each spare actually buys. A smaller model on the
+same key covers the common case — the big model rate-limited, or a request too
+large for the per-minute budget — but not the account itself going away. A
+second provider covers that. A model running on your own machine is the only
+endpoint nobody can take away from you, and the only one where the resume never
+leaves the building; it is also useless on a deployed instance, where localhost
+is the server rather than your laptop.
+
+Run `npm run llm:check` after editing. It prints the resolved chain and names
+any spare it skipped and why — a spare you believe you have and do not is worse
+than no spare at all.
+
 
 ---
 
