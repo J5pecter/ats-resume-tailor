@@ -266,7 +266,7 @@ set these environment variables in the project settings:
 |---|---|
 | `DATABASE_URL` | your Neon/Supabase connection string |
 | `AUTH_SECRET` | a fresh one — `npx auth secret` |
-| `AUTH_URL` | `https://your-app.vercel.app` |
+| `SIGNUP_CODE` | any hard-to-guess string — see the caution below |
 | `LLM_PROVIDER` | `groq` |
 | `OPENAI_COMPATIBLE_API_KEY` | your provider key |
 | `OPENAI_COMPATIBLE_BASE_URL` | `https://api.groq.com/openai/v1` |
@@ -277,10 +277,24 @@ set these environment variables in the project settings:
 tokens; sharing it between environments means a session minted on your laptop
 is valid against the deployed app.
 
-**A caution before you make it public.** Anyone who signs up shares your API key
-and its rate limit, and their resumes land in your database — which makes you
-responsible for that data. For personal use, keep the deployment private
-(Vercel password protection) or just run it locally with `npm run dev`.
+`AUTH_URL` is not needed on Vercel — NextAuth infers the host, and setting it
+to the wrong value (or to an empty string) breaks sign-in rather than fixing it.
+
+**A caution before you make it public.** A deployed instance is a standing
+offer to strangers. Anyone who signs up shares your API key and its rate limit,
+and leaves their resume — sensitive personal data — in your database, which
+makes you responsible for it.
+
+The host cannot help you here on the free plan: Vercel Authentication covers
+preview deployments only and refuses production, and password protection is a
+paid feature. So the gate is in the app. Set `SIGNUP_CODE` and registration
+requires it; the code is checked before the account row is written, so a wrong
+attempt leaves nothing behind. Leave it unset and signup stays open, which is
+what you want on a local checkout.
+
+It gates registration, not the app: people you have already given the code to
+keep their accounts. To lock things down completely, run it locally with
+`npm run dev` instead.
 
 Ollama cannot be used from a deployed app: it runs on your machine, not the
 server. Local model, local app.
