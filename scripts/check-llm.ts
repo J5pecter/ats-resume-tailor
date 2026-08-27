@@ -87,6 +87,18 @@ University of Mumbai, B.E. Information Technology, 8.4 CGPA, May 2019`;
     `\nevidence check: ${evidence.passed ? "passed" : "FAILED"} (${evidence.checked} bullets, ${evidence.failures.length} unsupported)`,
   );
 
+  // A count alone does not tell you whether a fallback is usable. "unrelated"
+  // means the model cited something real but not about this claim, which is
+  // how a weak model fails; "unsupported" means it quoted something that is
+  // not in the source at all. Both get dropped downstream, so the failure mode
+  // is a thinner resume rather than an invented one — but you want to see it
+  // before you rely on the endpoint, not after.
+  for (const f of evidence.failures) {
+    console.log(`  ${f.reason.padEnd(11)} ${f.where}`);
+    console.log(`    claim  ${f.text.slice(0, 96)}`);
+    console.log(`    cited  ${f.sourceEvidence.slice(0, 96)}  (overlap ${f.overlap.toFixed(2)})`);
+  }
+
   if (analysis.data.missing.length) {
     console.log(`honest gaps  : ${analysis.data.missing.map((m) => m.term).join(", ")}`);
   }

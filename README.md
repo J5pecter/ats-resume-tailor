@@ -336,6 +336,19 @@ endpoint nobody can take away from you, and the only one where the resume never
 leaves the building; it is also useless on a deployed instance, where localhost
 is the server rather than your laptop.
 
+And be clear-eyed about the local one specifically. It keeps the app *working*
+when every hosted tier is gone; it does not match them. A 3B model — which is
+what fits a 4GB card — tends to cite the employer's header line as evidence for
+most bullets. The relatedness check rejects those, so what you get back is a
+thinner resume rather than an invented one. That is the anti-fabrication guard
+doing exactly its job, and it is the right trade for a last resort: keep a
+second hosted account above it in the chain and leave the local model at the
+end, where it belongs.
+
+Size the model to your VRAM rather than your ambition. A 7B at Q4 is ~4.7GB and
+will not fit a 4GB card — it spills into system RAM and crawls, which presents
+as the app hanging rather than as an obvious error.
+
 Run `npm run llm:check` after editing. It prints the resolved chain and names
 any spare it skipped and why — a spare you believe you have and do not is worse
 than no spare at all.
