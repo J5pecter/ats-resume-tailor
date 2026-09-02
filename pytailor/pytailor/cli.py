@@ -74,6 +74,9 @@ def _summarise(outcome: pipeline.TailorOutcome) -> dict:
             "headline": retention.headline(),
             "substantialLoss": retention.substantial_loss,
             "dropped": [{"kind": d.kind, "where": d.where, "text": d.text} for d in retention.dropped],
+            "lostFromSource": [
+                {"kind": d.kind, "where": d.where, "text": d.text} for d in retention.lost_from_source
+            ],
         },
         "changeLog": outcome.change_log,
     }
@@ -143,6 +146,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  retention       : {report['retention']['headline']}")
         for dropped in report["retention"]["dropped"][:8]:
             print(f"      dropped {dropped['kind']:<7} {dropped['text'][:64]}")
+        lost = report["retention"]["lostFromSource"]
+        if lost:
+            # Measured against the candidate's own words, so this catches what
+            # the parser lost as well as what the rewrite dropped.
+            print(f"  !! {len(lost)} line(s) of your resume reached nothing in the output:")
+            for item in lost[:10]:
+                print(f"      {item['text'][:76]}")
     if report["gapKeywordsRemoved"]:
         print(f"  gap keywords    : {len(report['gapKeywordsRemoved'])} item(s) removed")
     if report["gapKeywordsSurviving"]:

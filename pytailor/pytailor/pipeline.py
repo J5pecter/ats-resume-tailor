@@ -87,7 +87,9 @@ def run(
     hits = find_forbidden(tailored, missing, raw_resume)
 
     # 4. retention, on what will actually ship.
-    retention = check_retention(original, tailored)
+    # The raw text as well as the parse: a role the parser lost is invisible
+    # to a comparison built out of what the parser saw.
+    retention = check_retention(original, tailored, raw_resume)
 
     return TailorOutcome(
         resume=tailored,

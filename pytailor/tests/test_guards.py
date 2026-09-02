@@ -372,3 +372,98 @@ class TestNullTolerance:
         assert read({"name": None}, "name") == ""
         assert read(None, "name") == ""
         assert read("not a dict", "name") == ""
+
+
+class TestSourceRetention:
+    """Catching what the PARSER lost, not just what the rewrite dropped.
+
+    On a real CV the parser silently dropped a "Financial Analysis Intern"
+    role, and retention reported "10 of 10 bullets kept" — because it compared
+    the output against the parse, and a role the parser never saw cannot appear
+    as missing from a list built out of what it saw. A guard that reports full
+    retention while a job vanishes is worse than none, because it is trusted.
+    """
+
+    RAW = """JAYESH MAHAJAN
+Mumbai
+
+WORK EXPERIENCE
+Mar 2024 - Present  Assistant Product Manager
+Managed end-to-end digital onboarding and servicing journeys across mobile and web.
+Defined business requirements and prepared BRDs and PRDs for structured development.
+
+May 2023 - Jun 2023  Financial Analysis Intern
+Built financial models and valuations to support investment decisions.
+Designed Power BI dashboards for data-driven decision making.
+"""
+
+    def _tailored_missing_the_internship(self):
+        return {
+            "contact": {"fullName": "Jayesh Mahajan"},
+            "summary": "",
+            "coreSkills": [],
+            "experience": [
+                {
+                    "company": "Anand Rathi",
+                    "role": "Assistant Product Manager",
+                    "bullets": [
+                        {
+                            "text": "Managed end-to-end digital onboarding and servicing journeys",
+                            "sourceEvidence": "Managed end-to-end digital onboarding and servicing journeys across mobile and web.",
+                        },
+                        {
+                            "text": "Defined business requirements and prepared BRDs and PRDs",
+                            "sourceEvidence": "Defined business requirements and prepared BRDs and PRDs for structured development.",
+                        },
+                    ],
+                }
+            ],
+        }
+
+    def test_the_parse_alone_sees_nothing_wrong(self):
+        # The parse that lost the internship, compared with an output that also
+        # lacks it: perfectly consistent, and quietly wrong.
+        parsed = self._tailored_missing_the_internship()
+        report = check_retention(parsed, self._tailored_missing_the_internship())
+        assert report.dropped == []
+        assert report.kept_bullets == report.original_bullets
+
+    def test_the_raw_text_catches_the_lost_internship(self):
+        parsed = self._tailored_missing_the_internship()
+        report = check_retention(parsed, self._tailored_missing_the_internship(), self.RAW)
+
+        lost = " ".join(d.text for d in report.lost_from_source)
+        assert "Financial Analysis Intern" in lost
+        assert "Power BI" in lost
+        # And it says so loudly rather than burying it in a ratio.
+        assert report.substantial_loss
+
+    def test_it_does_not_cry_wolf_when_nothing_was_lost(self):
+        parsed = self._tailored_missing_the_internship()
+        tailored = self._tailored_missing_the_internship()
+        tailored["experience"].append(
+            {
+                "company": "Infinite Financial Experts",
+                "role": "Financial Analysis Intern",
+                "bullets": [
+                    {
+                        "text": "Built financial models and valuations",
+                        "sourceEvidence": "Built financial models and valuations to support investment decisions.",
+                    },
+                    {
+                        "text": "Designed Power BI dashboards",
+                        "sourceEvidence": "Designed Power BI dashboards for data-driven decision making.",
+                    },
+                ],
+            }
+        )
+        report = check_retention(parsed, tailored, self.RAW)
+        assert report.lost_from_source == []
+
+    def test_headings_and_short_lines_are_not_reported_as_losses(self):
+        parsed = self._tailored_missing_the_internship()
+        report = check_retention(parsed, self._tailored_missing_the_internship(), self.RAW)
+        texts = [d.text for d in report.lost_from_source]
+        # "WORK EXPERIENCE", "Mumbai", "JAYESH MAHAJAN" are structure, not content.
+        assert "WORK EXPERIENCE" not in texts
+        assert "Mumbai" not in texts
