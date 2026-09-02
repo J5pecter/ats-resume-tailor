@@ -44,6 +44,19 @@ What GitHub *can* run is a command, which is what [`pytailor`](../pytailor) is
 for: `.github/workflows/tailor.yml` tailors a resume inside an Actions job and
 hands back the `.docx` and `.pdf` as an artifact.
 
+### GitHub Codespaces — the only way GitHub itself runs this
+
+`.devcontainer/` is configured, so **Code → Codespaces → Create codespace**
+installs everything and starts the app on a forwarded port automatically. A
+`SECRET_KEY` is generated on first run; add a model key to `webapp/.env`, or set
+`OPENAI_COMPATIBLE_API_KEY` as a [Codespaces secret](https://github.com/settings/codespaces)
+so every codespace picks it up.
+
+Be clear about what this is. A codespace stops when you close it, its URL
+changes each time, and the free allowance is 60 core-hours a month. It is
+"GitHub can run this for me right now", not somewhere to send a link. For a URL
+that stays put, use Render below.
+
 ### Hugging Face Spaces
 
 The one option that deploys by pushing to a git remote:
