@@ -239,6 +239,10 @@ Resume content is sensitive personal data, and this build treats it that way:
 Next.js app with server routes, a database, and an API key that must stay
 server-side. GitHub hosts the source — something else has to run it.
 
+The only way to run this on GitHub's own infrastructure is a Codespace with a
+forwarded port, which stops when you close it and gives a different URL each
+time. That is a development environment, not a host.
+
 Everything below has a free tier that covers personal use.
 
 **1. A Postgres database.** SQLite is a file on disk, and serverless hosts give
@@ -259,8 +263,23 @@ The deployed database therefore has no migration history: fine for an app that
 owns its database outright, worth revisiting if it ever holds data belonging to
 anyone but its owner.
 
-**2. Deploy.** Import the repo at [vercel.com/new](https://vercel.com/new) and
-set these environment variables in the project settings:
+**2. Deploy.** Two hosts are set up for this. Both are free.
+
+**Render** is the default, and `render.yaml` in the repo describes the whole
+service — go to [dashboard.render.com/blueprints](https://dashboard.render.com/blueprints),
+click **New Blueprint Instance**, pick this repository, and Render will prompt
+for the four secrets marked `sync: false`. Nothing else needs configuring. Note
+that a free Render service sleeps after about fifteen minutes idle, so the
+first visitor after a quiet spell waits roughly thirty seconds while it wakes.
+
+**Vercel** works too: import at [vercel.com/new](https://vercel.com/new) and
+set the variables below by hand.
+
+The build detects its host and rewrites the Prisma datasource to Postgres
+before generating the client. A local `npm run build` is left alone, so your
+checkout keeps its SQLite schema.
+
+Either way, these are the variables:
 
 | Variable | Value |
 |---|---|

@@ -11,7 +11,9 @@
  * schema is rewritten at build time to match the connection string. Every
  * model, index and relation stays in one file.
  *
- * Runs only on Vercel. A local build is left completely alone.
+ * Runs on a managed host only. A local build is left completely alone, so a
+ * checkout keeps its SQLite schema and `npm run build` on a laptop changes
+ * nothing in the working tree.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
@@ -21,17 +23,29 @@ const run = promisify(execFile);
 const SCHEMA = "prisma/schema.prisma";
 
 const url = (process.env.DATABASE_URL ?? "").trim();
-const onVercel = Boolean(process.env.VERCEL);
+
+/**
+ * Each host advertises itself. Keying off the host rather than off the
+ * connection string is deliberate: someone pointing a local checkout at a
+ * Postgres instance to try something should not find their schema file
+ * rewritten underneath them.
+ */
+const HOSTS = [
+  ["VERCEL", "Vercel"],
+  ["RENDER", "Render"],
+];
+const host = HOSTS.find(([key]) => Boolean(process.env[key]));
 const isPostgres = /^postgres(ql)?:\/\//i.test(url);
 
-if (!onVercel) {
-  console.log("[deploy] not on Vercel — leaving the SQLite schema untouched.");
+if (!host) {
+  console.log("[deploy] not on a managed host — leaving the SQLite schema untouched.");
   process.exit(0);
 }
+console.log(`[deploy] building on ${host[1]}.`);
 
 if (!url) {
   console.error(
-    "[deploy] DATABASE_URL is not set. Add a Postgres connection string in the Vercel project's environment variables.",
+    `[deploy] DATABASE_URL is not set. Add a Postgres connection string in the ${host[1]} service's environment variables.`,
   );
   process.exit(1);
 }

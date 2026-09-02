@@ -1,0 +1,75 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Free plan, so this costs nothing to run and cannot start costing anything
+# without a deliberate change. The trade is that a free web service sleeps
+# after about fifteen minutes with no traffic, and the next visitor waits
+# roughly thirty seconds while it wakes. For a personal instance that is the
+# right side of the bargain.
+#
+# The database is deliberately NOT declared here. Render's own free Postgres
+# expires after a fixed term, and a resume tool quietly losing its database on
+# a timer is worse than one that is slightly more work to set up. DATABASE_URL
+# points at the existing Neon instance instead, which does not expire.
+services:
+  - type: web
+    name: ats-resume-tailor
+    runtime: node
+    plan: free
+    region: oregon
+    # `npm ci` rather than `npm install`: the lockfile is the point of a
+    # reproducible deploy. postinstall runs prisma generate, and the build
+    # script rewrites the datasource to Postgres before generating again.
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      # Pinned because the build runs Prisma and Next, and a silent major
+      # version bump underneath a deploy is a bad way to find out about it.
+      - key: NODE_VERSION
+        value: "22"
+
+      # Set these in the Render dashboard, not here. sync: false means Render
+      # prompts for the value and keeps it out of the repository.
+      - key: DATABASE_URL
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: OPENAI_COMPATIBLE_API_KEY
+        sync: false
+      # Registration is closed to anyone without this. A deployed instance is a
+      # standing offer to strangers, and whoever signs up shares the owner's
+      # API key and leaves their resume in the owner's database.
+      - key: SIGNUP_CODE
+        sync: false
+
+      - key: LLM_PROVIDER
+        value: groq
+      - key: OPENAI_COMPATIBLE_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: OPENAI_COMPATIBLE_MODEL
+        value: openai/gpt-oss-120b
+      - key: OPENAI_COMPATIBLE_TPM
+        value: "8000"
+
+      # A smaller model on the same key, tried when the primary is rate-limited
+      # or the request is too large for the per-minute budget. An Ollama slot is
+      # pointless here: on a host, localhost is the server, not your machine.
+      - key: LLM_FALLBACKS
+        value: smaller
+      - key: LLM_SMALLER_MODEL
+        value: openai/gpt-oss-20b
+
+      # A metered provider refuses to run unless this is true. Everything above
+      # is free, so spending money should take a deliberate act rather than an
+      # absent-minded env change.
+      - key: ALLOW_PAID_PROVIDERS
+        value: "false"
+
+      - key: MAX_UPLOAD_MB
+        value: "5"
+      - key: RATE_LIMIT_GENERATIONS_PER_HOUR
+        value: "20"
+
+# AUTH_URL is deliberately absent. NextAuth infers the host, and setting it to
+# the wrong value — or to an empty string — breaks sign-in rather than fixing
+# it. That already cost an afternoon on the Vercel deployment.

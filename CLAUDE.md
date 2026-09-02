@@ -113,6 +113,13 @@ skills carried evidence still parse.
 - Every data route checks session AND row ownership via `lib/ownership.ts`.
 - Never log resume or JD content. `LlmCall` stores counts and timings only.
 
+`scripts/prepare-deploy.mjs` rewrites the Prisma datasource to Postgres at
+build time, keyed off the host advertising itself (`VERCEL`, `RENDER`) rather
+than off the connection string — someone pointing a local checkout at Postgres
+should not find their schema file rewritten underneath them. `render.yaml`
+describes the Render service; secrets are `sync: false` so they stay out of
+the repo.
+
 Scripts that import server modules run under `node --conditions=react-server`,
 because `server-only` throws outside that resolution condition.
 
