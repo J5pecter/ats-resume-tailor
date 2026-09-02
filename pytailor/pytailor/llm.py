@@ -22,7 +22,20 @@ from dataclasses import dataclass
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL = "openai/gpt-oss-120b"
 DEFAULT_TPM = 8000
+# A hosted model answers in seconds. A 3B on a laptop GPU generating three
+# thousand tokens takes minutes, and it is not metered, so there is nothing
+# to protect by cutting it off early — the deadline exists to stop a hung
+# HOSTED call, not to hurry a local one.
 TIMEOUT_SECONDS = 90
+LOCAL_TIMEOUT_SECONDS = 600
+# A free tier meters by the minute, and a full run of the pipeline is four
+# calls totalling well over one minute's budget — so it WILL be paused
+# partway through, every time, by design rather than by accident. Waiting is
+# the normal path, not an error path, so the waits accumulate against a total
+# rather than being allowed once. Retrying only once was a behaviour lost in
+# the port, and it made a real resume impossible to tailor on the free tier.
+MAX_SINGLE_WAIT_SECONDS = 45
+MAX_TOTAL_WAIT_SECONDS = 150
 USER_AGENT = "pytailor/1.0 (+https://github.com/J5pecter/ats-resume-tailor)"
 
 
@@ -109,6 +122,43 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 3 + 1
 
 
+# "7m10.272s", "43s", "1m". Parsing only the trailing seconds — which a naive
+# pattern does — turns a seven-minute wait into eleven, so the client retries
+# far too early and spins against the limit it is trying to respect.
+_DURATION = re.compile(r"try again in\s+(?:(\d+)m)?\s*([\d.]+)s", re.I)
+# A daily cap is a different animal from a per-minute one: no amount of waiting
+# inside one session clears it, so saying "retrying in 20s" would be a lie.
+_PER_DAY = re.compile(r"per day|TPD", re.I)
+
+
+def _rate_limit_error(name: str, headers, detail: str) -> LlmRateLimited:
+    seconds = 20
+    # The header is authoritative and exact; the prose is a fallback.
+    header = headers.get("retry-after") if headers else None
+    try:
+        if header is not None:
+            seconds = max(1, int(float(header)))
+    except (TypeError, ValueError):
+        pass
+    else:
+        if header is None:
+            match = _DURATION.search(detail)
+            if match:
+                minutes = int(match.group(1) or 0)
+                seconds = int(minutes * 60 + float(match.group(2))) + 1
+
+    if _PER_DAY.search(detail):
+        used = re.search(r"Limit (\d+), Used (\d+)", detail)
+        budget = f" ({used.group(2)} of {used.group(1)} tokens used)" if used else ""
+        return LlmRateLimited(
+            f"{name} has exhausted its DAILY token allowance{budget}. Waiting will not help "
+            f"inside this run — it resets in about {seconds // 60}m{seconds % 60}s. Use a "
+            "different key, or point OPENAI_COMPATIBLE_BASE_URL at a local Ollama.",
+            seconds,
+        )
+    return LlmRateLimited(f"{name} is rate limited; ready again in {seconds}s.", seconds)
+
+
 def _call_once(endpoint: Endpoint, system: str, user: str, max_tokens: int) -> str:
     # Metered tiers bill prompt + reserved completion whether the reservation
     # is used or not, so asking for a comfortable 8k on an 8k/min tier fails
@@ -149,19 +199,24 @@ def _call_once(endpoint: Endpoint, system: str, user: str, max_tokens: int) -> s
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        deadline = LOCAL_TIMEOUT_SECONDS if endpoint.is_local else TIMEOUT_SECONDS
+        with urllib.request.urlopen(request, timeout=deadline) as response:
             body = json.loads(response.read().decode())
     except urllib.error.HTTPError as err:
         detail = err.read().decode(errors="replace")[:300]
         if err.code == 429:
-            wait = 20
-            match = re.search(r"try again in ([\d.]+)s", detail, re.I)
-            if match:
-                wait = int(float(match.group(1))) + 1
-            raise LlmRateLimited(f"{endpoint.name} is rate limited.", wait) from err
+            raise _rate_limit_error(endpoint.name, err.headers, detail) from err
         raise LlmError(f"{endpoint.name} returned {err.code}. {detail}") from err
     except urllib.error.URLError as err:
         raise LlmError(f"{endpoint.name} unreachable: {err.reason}") from err
+    except (TimeoutError, OSError) as err:
+        # A socket timeout raises TimeoutError directly rather than through
+        # URLError, so without this it escapes as a raw traceback and the chain
+        # never gets the chance to try the next endpoint.
+        raise LlmError(
+            f"{endpoint.name} did not respond within "
+            f"{LOCAL_TIMEOUT_SECONDS if endpoint.is_local else TIMEOUT_SECONDS}s: {err}"
+        ) from err
 
     choice = (body.get("choices") or [{}])[0]
     if choice.get("finish_reason") == "length":
@@ -192,15 +247,18 @@ def call_json(
 
     for index, endpoint in enumerate(chain):
         try:
-            try:
-                raw = _call_once(endpoint, system, user, max_tokens)
-            except LlmRateLimited as limited:
-                if limited.retry_after <= 45:
-                    on_event(f"rate limited, waiting {limited.retry_after}s")
-                    time.sleep(limited.retry_after)
+            waited = 0.0
+            while True:
+                try:
                     raw = _call_once(endpoint, system, user, max_tokens)
-                else:
-                    raise
+                    break
+                except LlmRateLimited as limited:
+                    wait = limited.retry_after
+                    if wait > MAX_SINGLE_WAIT_SECONDS or waited + wait > MAX_TOTAL_WAIT_SECONDS:
+                        raise
+                    waited += wait
+                    on_event(f"rate limited, waiting {wait}s (of {MAX_TOTAL_WAIT_SECONDS}s allowed)")
+                    time.sleep(wait)
 
             if index > 0:
                 on_event(f"served by fallback {endpoint.name} ({endpoint.model})")

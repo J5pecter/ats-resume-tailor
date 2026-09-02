@@ -153,6 +153,33 @@ Shape:
     return system, user
 
 
+def _without_evidence(resume: dict[str, Any]) -> dict[str, Any]:
+    """The parsed resume with the parser's own quotes stripped out.
+
+    Those quotes are the parser echoing the raw text back, and the raw text is
+    supplied in full alongside — so sending both is the same content twice. On
+    a real CV that duplication cost about 2,000 tokens of an 8,000-per-minute
+    budget, which left too little room for the answer: the reply came back
+    truncated at 3,004 tokens and the run failed.
+    """
+    out = dict(resume)
+    out["experience"] = [
+        {
+            **role,
+            "bullets": [{"text": b.get("text", "")} for b in role.get("bullets") or []],
+        }
+        for role in resume.get("experience") or []
+    ]
+    out["coreSkills"] = [
+        {
+            **group,
+            "skills": [{"name": s.get("name", "")} for s in group.get("skills") or []],
+        }
+        for group in resume.get("coreSkills") or []
+    ]
+    return out
+
+
 def tailor_engine(
     jd: dict[str, Any],
     analysis: dict[str, Any],
@@ -186,7 +213,7 @@ Shape:
     user = (
         f"<job_profile>\n{json.dumps(jd)}\n</job_profile>\n\n"
         f"<gap_analysis>\n{json.dumps(analysis)}\n</gap_analysis>\n\n"
-        f"<parsed_resume>\n{json.dumps(resume)}\n</parsed_resume>\n\n"
+        f"<parsed_resume>\n{json.dumps(_without_evidence(resume))}\n</parsed_resume>\n\n"
         f"<candidate_original_text>\n{raw_resume}\n</candidate_original_text>\n\n"
         "Return the TailorResult JSON."
     )
