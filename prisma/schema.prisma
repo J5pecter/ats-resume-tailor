@@ -19,6 +19,10 @@ model User {
   fullName     String?
   createdAt    DateTime @default(now())
 
+  /// Set the moment an emailed code is accepted. Null means the address was
+  /// typed but never proven, and such an account cannot sign in.
+  emailVerifiedAt DateTime?
+
   jobDescriptions JobDescription[]
   resumes         SourceResume[]
   tailored        TailoredResume[]
@@ -99,19 +103,63 @@ model Analysis {
 
 // Rate limiting + observability. Deliberately stores NO resume or JD content.
 model LlmCall {
-  id          String   @id @default(cuid())
-  userId      String
-  promptName  String
-  provider    String
-  model       String
-  inputTokens Int      @default(0)
-  outputTokens Int     @default(0)
-  latencyMs   Int      @default(0)
-  attempts    Int      @default(1)
-  ok          Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  promptName   String
+  provider     String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  latencyMs    Int      @default(0)
+  attempts     Int      @default(1)
+  ok           Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/// A one-time code sent to an email address.
+///
+/// The code itself is never stored. Only a hash of it is, for the same reason
+/// passwords are hashed: anyone who reads this table - a backup, a support
+/// query, a leak - would otherwise be able to sign in as anybody who happened
+/// to have a code outstanding.
+model EmailOtp {
+  id        String    @id @default(cuid())
+  email     String
+  codeHash  String
+  /// "signup" proves a new address; "login" is a password-free way in.
+  purpose   String
+  expiresAt DateTime
+  /// Set on use. A code that has been accepted once is dead.
+  usedAt    DateTime?
+  /// Guessing a 6-digit code is easy given unlimited tries, so tries are counted.
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([email, purpose, expiresAt])
+}
+
+/// Who signed up, who signed in, and how.
+///
+/// Deliberately holds no password and no resume content. An audit trail is
+/// read by more people than the database is, and the useful facts here are the
+/// address, the moment and the method.
+model AuthEvent {
+  id        String   @id @default(cuid())
+  email     String
+  /// "signup" | "login" | "otp_sent" | "otp_failed" | "verified"
+  event     String
+  /// "password" | "otp" | "google" | null
+  method    String?
+  ip        String?
+  userAgent String?
+  /// False until the row has been mirrored to the configured spreadsheet.
+  exported  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([exported])
 }
