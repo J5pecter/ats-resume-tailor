@@ -16,7 +16,10 @@ four steps repeated by hand at each call site:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from . import prompts
@@ -44,28 +47,95 @@ class TailorOutcome:
 Reporter = Callable[[str], None]
 
 
+class _Cache:
+    """Remembers completed steps so an interrupted run resumes instead of restarting.
+
+    Without this, a retry on a metered free tier is self-defeating: each attempt
+    spends the small amount of allowance that has trickled back on redoing the
+    parses that already succeeded, dies at the same step, and never accumulates
+    enough to reach the end. Observed exactly that — attempt one died at the
+    gap analysis, attempt two died at the gap analysis, having burned the
+    intervening refill on the two steps before it.
+
+    Keyed by the content, so editing the resume or the posting correctly
+    invalidates it and nothing stale is silently reused.
+    """
+
+    def __init__(self, directory: Path | None, resume_text: str, jd_text: str) -> None:
+        self.dir = directory
+        # A separator, so a resume ending "X" with a posting starting "Y" cannot
+        # hash the same as one ending "XY" with a posting starting empty.
+        joined = resume_text + chr(30) + jd_text
+        digest = hashlib.sha256(joined.encode()).hexdigest()[:16]
+        self.prefix = digest
+        if self.dir is not None:
+            self.dir.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, step: str) -> Path | None:
+        return None if self.dir is None else self.dir / f"{self.prefix}.{step}.json"
+
+    def load(self, step: str) -> dict | None:
+        path = self._path(step)
+        if path is None or not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def save(self, step: str, value: dict) -> None:
+        path = self._path(step)
+        if path is None:
+            return
+        try:
+            path.write_text(json.dumps(value), encoding="utf-8")
+        except OSError:
+            # A cache that cannot be written is a lost optimisation, not a
+            # failed run.
+            pass
+
+
 def run(
     raw_resume: str,
     raw_jd: str,
     *,
     say: Reporter = lambda msg: None,
+    cache_dir: Path | None = None,
 ) -> TailorOutcome:
-    """The whole thing: four model calls, then the guards."""
-    say("Reading the job posting...")
-    system, user = prompts.jd_parser(raw_jd)
-    jd = call_json(system, user, max_tokens=2000, on_event=say)
+    """The whole thing: four model calls, then the guards.
 
-    say("Reading your resume...")
-    system, user = prompts.resume_parser(raw_resume)
-    parsed = call_json(system, user, max_tokens=3000, on_event=say)
+    Pass `cache_dir` and completed steps survive a failure, so a retry picks up
+    where it stopped rather than paying for the same parses again.
+    """
+    cache = _Cache(cache_dir, raw_resume, raw_jd)
 
-    say("Scoring you against it...")
-    system, user = prompts.gap_analysis(jd, parsed, raw_resume)
-    analysis = call_json(system, user, max_tokens=2500, on_event=say)
+    def step(name: str, label: str, build, max_tokens: int) -> dict:
+        cached = cache.load(name)
+        if cached is not None:
+            say(f"{label} (from an earlier attempt)")
+            return cached
+        say(label)
+        system, user = build()
+        value = call_json(system, user, max_tokens=max_tokens, on_event=say)
+        cache.save(name, value)
+        return value
 
-    say("Tailoring...")
-    system, user = prompts.tailor_engine(jd, analysis, parsed, raw_resume)
-    result = call_json(system, user, max_tokens=4000, on_event=say)
+    jd = step("jd", "Reading the job posting...", lambda: prompts.jd_parser(raw_jd), 2000)
+    parsed = step(
+        "resume", "Reading your resume...", lambda: prompts.resume_parser(raw_resume), 3000
+    )
+    analysis = step(
+        "analysis",
+        "Scoring you against it...",
+        lambda: prompts.gap_analysis(jd, parsed, raw_resume),
+        2500,
+    )
+    result = step(
+        "tailored",
+        "Tailoring...",
+        lambda: prompts.tailor_engine(jd, analysis, parsed, raw_resume),
+        4000,
+    )
 
     tailored = result.get("resume") or {}
 

@@ -91,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--jd", required=True, type=Path, help="the job posting, as a text file")
     parser.add_argument("--out", type=Path, default=Path("build"), help="output directory")
     parser.add_argument("--quiet", action="store_true", help="only print the summary")
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="ignore any cached steps from an earlier attempt and start over",
+    )
     args = parser.parse_args(argv)
 
     for path in (args.resume, args.jd):
@@ -114,7 +119,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        outcome = pipeline.run(raw_resume, raw_jd, say=say)
+        # Completed steps are cached beside the output, so a run interrupted by
+        # a spent allowance resumes rather than paying for the same parses again.
+        cache_dir = None if args.fresh else args.out / ".cache"
+        outcome = pipeline.run(raw_resume, raw_jd, say=say, cache_dir=cache_dir)
     except LlmConfigError as err:
         print(f"\n{err}", file=sys.stderr)
         return 3
