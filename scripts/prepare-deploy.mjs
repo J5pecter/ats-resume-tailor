@@ -87,4 +87,31 @@ const { stdout, stderr } = await run("npx", ["prisma", "db", "push", "--skip-gen
 });
 process.stdout.write(stdout);
 if (stderr) process.stderr.write(stderr);
+/**
+ * Grandfather accounts that predate email verification.
+ *
+ * Production syncs with `db push`, which reconciles the schema and never runs
+ * a migration file, so a data backfill has to happen here or not at all.
+ * Sign-in now refuses an unverified account, and every account created before
+ * verification existed has a null there — leaving them would lock every
+ * existing user out of their own data, including whoever deployed this.
+ *
+ * Idempotent by construction: it only touches rows that are still null, so it
+ * can run on every deploy forever and will do nothing after the first.
+ */
+console.log("[deploy] grandfathering pre-verification accounts...");
+try {
+  const { stdout: backfilled } = await run(
+    "npx",
+    ["prisma", "db", "execute", "--url", url, "--file", "prisma/backfill/verify-existing-accounts.sql"],
+    { env: process.env, shell: process.platform === "win32" },
+  );
+  if (backfilled) process.stdout.write(backfilled);
+} catch (err) {
+  // Must not take a deploy down: the schema is already correct and the app
+  // runs. It would leave old accounts locked out, which is loud enough to
+  // notice and fixed by re-running the deploy.
+  console.error("[deploy] backfill failed:", err.message);
+}
+
 console.log("[deploy] database ready.");

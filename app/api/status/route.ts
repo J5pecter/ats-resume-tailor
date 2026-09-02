@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth, googleEnabled } from "@/lib/auth";
-import { signupCodeRequired } from "@/lib/signupGate";
 import { activeModel, activeProvider, missingKeyMessage, providerReady } from "@/lib/llm/providers";
 import { resolveChain } from "@/lib/llm/endpoints";
+import { mailTransportName } from "@/lib/auth/mail";
+import { sheetLoggingEnabled } from "@/lib/auth/audit";
 import { generationLimit, generationsRemaining } from "@/lib/rateLimit";
 import { routeError } from "@/lib/api";
 
@@ -41,7 +42,8 @@ export async function GET() {
     return NextResponse.json({
       llm: { provider, model, ready, hint, fallbacks },
       googleEnabled: googleEnabled(),
-      signupCodeRequired: signupCodeRequired(),
+      mail: mailTransportName(),
+      sheetLogging: sheetLoggingEnabled(),
       quota: session?.user?.id
         ? { remaining: await generationsRemaining(session.user.id), limit: generationLimit() }
         : null,

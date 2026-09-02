@@ -32,6 +32,20 @@ const REPLACEMENTS: [RegExp, string][] = [
   [/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, " "],
   // Zero-width characters: invisible on screen, and they split tokens.
   [/[\u200B\u200C\u200D\uFEFF]/g, ""],
+  // Space before a comma or full stop. Almost always the candidate's own typo
+  // carried through faithfully from their CV — "Kandivali ,Mumbai" — and it
+  // sits on the contact line directly under their name, where it is the one
+  // thing on the page that looks careless. Fixing punctuation spacing is
+  // typography, not fabrication: no word is added, removed or changed.
+  // Horizontal whitespace only. \s would match a newline and silently weld two
+  // lines together, which is a far worse edit than the typo being fixed.
+  [/[ 	]+([,.;:])/g, "$1"],
+  // And the other half: no space after it. Restricted to a following LETTER on
+  // purpose — a digit there is a thousands separator or a time, and the first
+  // draft of this rule turned "40,000 monthly applicants" into "40, 000" and
+  // "6:00" into "6: 00". Mangling a metric is precisely the failure this
+  // codebase exists to prevent, so the narrow rule is the correct one.
+  [/([,;:])(?=[A-Za-z])/g, "$1 "],
   // Markdown emphasis markers the model was told not to emit.
   [/\*\*(.+?)\*\*/g, "$1"],
   [/__(.+?)__/g, "$1"],

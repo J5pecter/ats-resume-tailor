@@ -105,3 +105,36 @@ describe("ATS text sanitisation", () => {
     expect(serialised).not.toMatch(/[\u2010-\u2015\u2018-\u201F\u2026\u00A0\u200B-\u200D\uFEFF]/);
   });
 });
+
+describe("punctuation spacing", () => {
+  it("closes up a space before a comma", () => {
+    // Straight from a real CV: it renders directly under the candidate's name.
+    expect(sanitiseText("Kandivali ,Mumbai")).toBe("Kandivali, Mumbai");
+  });
+
+  it("adds the missing space after one", () => {
+    expect(sanitiseText("Mumbai,India")).toBe("Mumbai, India");
+  });
+
+  it("leaves correct punctuation alone", () => {
+    expect(sanitiseText("Kandivali, Mumbai")).toBe("Kandivali, Mumbai");
+    expect(sanitiseText("Reduced drop-off by 31%.")).toBe("Reduced drop-off by 31%.");
+  });
+
+  it("does not mangle numbers, which is the whole point of the narrow rule", () => {
+    // The first draft of this rule produced "40, 000" and "6: 00". Corrupting
+    // a metric is the failure this codebase exists to prevent.
+    expect(sanitiseText("40,000 monthly applicants")).toBe("40,000 monthly applicants");
+    expect(sanitiseText("CGPA 8.20")).toBe("CGPA 8.20");
+    expect(sanitiseText("Cut runtime from 6:00 to 0:40")).toBe("Cut runtime from 6:00 to 0:40");
+    expect(sanitiseText("2.1 crore")).toBe("2.1 crore");
+  });
+
+  it("never welds two lines together", () => {
+    // A greedy whitespace class would match the newline before a comma and
+    // join two bullets into one, which is a far worse edit than the typo.
+    const two = "Led the team\nDelivered on time";
+    expect(sanitiseText(two)).toContain("\n");
+  });
+});
+

@@ -285,7 +285,7 @@ Either way, these are the variables:
 |---|---|
 | `DATABASE_URL` | your Neon/Supabase connection string |
 | `AUTH_SECRET` | a fresh one — `npx auth secret` |
-| `SIGNUP_CODE` | any hard-to-guess string — see the caution below |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | to email the sign-in codes |
 | `LLM_PROVIDER` | `groq` |
 | `OPENAI_COMPATIBLE_API_KEY` | your provider key |
 | `OPENAI_COMPATIBLE_BASE_URL` | `https://api.groq.com/openai/v1` |
@@ -306,16 +306,17 @@ offer to strangers. Anyone who signs up shares your API key and its rate limit,
 and leaves their resume — sensitive personal data — in your database, which
 makes you responsible for it.
 
-The host cannot help you here on the free plan: Vercel Authentication covers
-preview deployments only and refuses production, and password protection is a
-paid feature. So the gate is in the app. Set `SIGNUP_CODE` and registration
-requires it; the code is checked before the account row is written, so a wrong
-attempt leaves nothing behind. Leave it unset and signup stays open, which is
-what you want on a local checkout.
+Signup is open to anyone, gated by a code emailed to the address they typed.
+That is not a limit on who may join; it is proof that whoever joined can read
+mail at the address they gave, and a record of when. Every sign-up and sign-in
+is written to the `AuthEvent` table, and mirrored to a spreadsheet if you
+configure one — see [docs/sheet-logging.md](docs/sheet-logging.md).
 
-It gates registration, not the app: people you have already given the code to
-keep their accounts. To lock things down completely, run it locally with
-`npm run dev` instead.
+Without SMTP configured the app still issues codes; it prints them to the
+server log rather than emailing them. Fine locally, useless in production, and
+it warns every time. `/api/status` reports which transport is in use.
+
+To keep it genuinely private, run it locally with `npm run dev` instead.
 
 Ollama cannot be used from a deployed app: it runs on your machine, not the
 server. Local model, local app.

@@ -4,21 +4,27 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { signupCodeMatches, signupCodeRequired } from "@/lib/signupGate";
+import { recordAuthEvent } from "@/lib/auth/audit";
+import { verifyOtp } from "@/lib/auth/otp";
 
 /**
  * NextAuth v5, JWT sessions (§2).
  *
- * Two ways in:
+ * Three ways in:
  *   - Credentials: email + password, bcrypt cost 12. Always available.
+ *   - Email code: a one-time code, for people who never set a password or
+ *     cannot remember one. Same account either way.
  *   - Google: enabled only when AUTH_GOOGLE_ID/SECRET are present, so the app
  *     runs with zero external setup and gains the button when you add a key.
+ *
+ * Every path requires a verified address. An account whose email was typed but
+ * never proven cannot sign in by any means — otherwise the verification step
+ * would be decorative, since an attacker could register someone else's address
+ * and simply use the password they chose.
  *
  * No database adapter: sessions are JWTs and the Google flow upserts into our
  * own User table, which keeps the schema exactly as specified in §3.
  */
-
-export { signupCodeMatches, signupCodeRequired };
 
 export const BCRYPT_COST = 12;
 
@@ -34,8 +40,13 @@ export const CredentialsSchema = z.object({
 
 export const SignUpSchema = CredentialsSchema.extend({
   fullName: z.string().trim().min(1, "Enter your name.").max(120),
-  /** Only checked when SIGNUP_CODE is set — see signupCodeRequired(). */
-  signupCode: z.string().optional(),
+  /** The code emailed to this address. Signup is open; proving the address is not. */
+  code: z.string().trim().min(1, "Enter the code we emailed you."),
+});
+
+export const OtpLoginSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
+  code: z.string().trim().min(1, "Enter the code we emailed you."),
 });
 
 const providers: NextAuthConfig["providers"] = [
@@ -54,10 +65,41 @@ const providers: NextAuthConfig["providers"] = [
       });
       // An account created through Google has no usable password hash.
       if (!user || !user.passwordHash) return null;
+      // Unverified means the address was never proven. Refusing here is what
+      // stops someone registering an address they do not own and walking in.
+      if (!user.emailVerifiedAt) return null;
 
       const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
       if (!ok) return null;
 
+      void recordAuthEvent({ email: user.email, event: "login", method: "password" });
+      return { id: user.id, email: user.email, name: user.fullName ?? undefined };
+    },
+  }),
+
+  Credentials({
+    id: "otp",
+    name: "Email code",
+    credentials: {
+      email: { label: "Email", type: "email" },
+      code: { label: "Code", type: "text" },
+    },
+    async authorize(raw) {
+      const parsed = OtpLoginSchema.safeParse(raw);
+      if (!parsed.success) return null;
+
+      const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+      // Verified only. A code proves the address now, but an account that was
+      // never verified has no established owner to prove anything about.
+      if (!user?.emailVerifiedAt) return null;
+
+      const result = await verifyOtp(parsed.data.email, "login", parsed.data.code);
+      if (!result.ok) {
+        void recordAuthEvent({ email: parsed.data.email, event: "otp_failed", method: "otp" });
+        return null;
+      }
+
+      void recordAuthEvent({ email: user.email, event: "login", method: "otp" });
       return { id: user.id, email: user.email, name: user.fullName ?? undefined };
     },
   }),
@@ -88,10 +130,17 @@ export const authConfig: NextAuthConfig = {
       // credentials provider treats as "no password login for this account".
       const record = await prisma.user.upsert({
         where: { email },
-        update: { fullName: user.name ?? undefined },
-        create: { email, fullName: user.name ?? null, passwordHash: "" },
+        // Google has already proven the address, so it counts as verified.
+        update: { fullName: user.name ?? undefined, emailVerifiedAt: new Date() },
+        create: {
+          email,
+          fullName: user.name ?? null,
+          passwordHash: "",
+          emailVerifiedAt: new Date(),
+        },
       });
       user.id = record.id;
+      void recordAuthEvent({ email, event: "login", method: "google" });
       return true;
     },
     async jwt({ token, user }) {

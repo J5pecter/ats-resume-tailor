@@ -36,10 +36,22 @@ services:
         sync: false
       - key: OPENAI_COMPATIBLE_API_KEY
         sync: false
-      # Registration is closed to anyone without this. A deployed instance is a
-      # standing offer to strangers, and whoever signs up shares the owner's
-      # API key and leaves their resume in the owner's database.
-      - key: SIGNUP_CODE
+      # Mail, for the one-time codes. Without these the app still runs and
+      # still issues codes — it prints them to the server log instead of
+      # sending them, which is fine on a laptop and useless in production.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      # Optional: a Google Apps Script web app URL that appends a row per
+      # sign-up and sign-in. Never receives passwords — there are none to send.
+      - key: SHEETS_WEBHOOK_URL
+        sync: false
+      - key: SHEETS_WEBHOOK_SECRET
         sync: false
 
       - key: LLM_PROVIDER
