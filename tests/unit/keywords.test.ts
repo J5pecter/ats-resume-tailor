@@ -182,3 +182,40 @@ NVQ Level 3 Electrical Installation, 2018`;
     expect(removed.length).toBeGreaterThan(0);
   });
 });
+
+describe("typographic look-alikes in the gap terms", () => {
+  // The eval corpus produced "PLC fault<NBH>finding" on the MISSING list while
+  // the resume wrote an ordinary hyphen. Compared raw, that matches nothing.
+  const NB_HYPHEN = "‑";
+
+  const ANALYSIS = {
+    atsScore: 40,
+    matched: [],
+    partial: [],
+    missing: [{ term: `PLC fault${NB_HYPHEN}finding`, importance: "high" }],
+    recommendations: [],
+  } as unknown as MatchAnalysis;
+
+  function withSkill(name: string): ResumeDoc {
+    const doc = structuredClone(SAMPLE_RESUME);
+    doc.coreSkills[0].skills.push({ name, sourceEvidence: "some evidence" });
+    return doc;
+  }
+
+  it("still strips the term when the document spells it with a plain hyphen", () => {
+    const { removed } = stripForbiddenKeywords(withSkill("PLC fault-finding"), ANALYSIS);
+    expect(removed).toHaveLength(1);
+  });
+
+  it("exempts a credential the source spells with a plain hyphen", () => {
+    // Otherwise a real qualification is deleted because two hyphens differ.
+    const source = "Certified in PLC fault-finding, 2021";
+    const { removed } = stripForbiddenKeywords(
+      withSkill("PLC fault-finding"),
+      ANALYSIS,
+      source,
+    );
+    expect(removed).toHaveLength(0);
+    expect(findForbiddenKeywords(withSkill("PLC fault-finding"), ANALYSIS, source)).toHaveLength(0);
+  });
+});

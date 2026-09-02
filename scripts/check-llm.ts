@@ -76,7 +76,7 @@ University of Mumbai, B.E. Information Technology, 8.4 CGPA, May 2019`;
   );
 
   console.log("3/3  GAP_ANALYSIS …");
-  const analysis = await callStructured(gapAnalysisPrompt(jd.data, resume.data));
+  const analysis = await callStructured(gapAnalysisPrompt(jd.data, resume.data, RESUME));
   console.log(
     `     ok  score ${Math.round(analysis.data.atsScore)} · ${analysis.data.matched.length} matched · ${analysis.data.partial.length} partial · ${analysis.data.missing.length} missing · ${analysis.meta.latencyMs}ms`,
   );

@@ -22,6 +22,19 @@ RULES
 8. Expand acronyms ONLY where the resume itself defines them elsewhere.
 9. headline: if the resume states one, use it verbatim. Otherwise derive it from
    the most recent job title alone. Never invent a specialism.
+10. Read sections by their CONTENT, not by their heading. QUALIFICATIONS,
+    LICENCES, ACCREDITATIONS, TRAINING, PROFESSIONAL DEVELOPMENT, MEMBERSHIPS
+    and CREDENTIALS all carry the same things as CERTIFICATIONS and EDUCATION.
+    A line naming an award and a year is a credential: file a degree or diploma
+    under education, and a licence, certificate or ticket under certifications.
+11. NEVER discard a line because it does not fit neatly. If you cannot classify
+    something, put it in additional with a sensible label. Dropping it does not
+    tidy the document, it deletes the candidate's evidence: a lost credential
+    forfeits a keyword match, and the gap analysis that runs next will report it
+    as something the candidate lacks — telling them to explain away a
+    qualification they actually hold.
+12. Rule 2 lets you omit a field the resume does not have. It never lets you
+    omit something the resume does have.
 
 ${JSON_ONLY}
 

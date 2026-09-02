@@ -48,6 +48,9 @@ export async function POST(req: Request) {
       ...gapAnalysisPrompt(
         jd.parsedJson as unknown as JDProfile,
         source.parsedJson as unknown as ResumeDoc,
+        // The parse is lossy; the source is not. Judging a gap on the parse
+        // alone once reported a qualification the candidate holds as missing.
+        source.rawText,
       ),
       userId,
     });

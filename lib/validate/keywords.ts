@@ -1,5 +1,6 @@
 import type { ResumeDoc } from "@/lib/schema/resume";
 import type { MatchAnalysis } from "@/lib/schema/analysis";
+import { sanitiseText } from "./sanitize";
 
 /**
  * Guard for §5.4 rule 4: keywords from the MISSING list are honest gaps and
@@ -55,9 +56,22 @@ export interface ForbiddenRemoval {
   term: string;
 }
 
+/**
+ * Both sides are normalised before comparing, for the same reason sanitise
+ * runs before the evidence check: the model emits typographic look-alikes.
+ *
+ * The eval corpus produced "PLC fault‑finding" — a non-breaking hyphen —
+ * on the MISSING list while the resume used an ordinary one. Compared raw,
+ * that term matches nothing. Both directions of that are dangerous: a real
+ * credential fails the source exemption and gets stripped, and a genuinely
+ * forbidden term goes undetected in the output. Normalising here covers the
+ * finder, the stripper and the exemption at once, since all three route
+ * through this function.
+ */
 /** Whole-word, case-insensitive match so "R" doesn't fire on "Reduced". */
-function containsTerm(haystack: string, term: string): boolean {
-  const cleaned = term.trim();
+function containsTerm(rawHaystack: string, rawTerm: string): boolean {
+  const haystack = sanitiseText(rawHaystack);
+  const cleaned = sanitiseText(rawTerm).trim();
   if (cleaned.length < 2) return false;
   const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, "i").test(haystack);
