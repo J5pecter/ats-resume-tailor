@@ -1,0 +1,33 @@
+name: pytailor tests
+
+# The guards are the reason this tool is worth using, so they run on every push
+# that touches them. No API key needed: every test here is offline.
+on:
+  push:
+    paths: ["pytailor/**", ".github/workflows/pytailor-ci.yml"]
+  pull_request:
+    paths: ["pytailor/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor stated in pyproject and the version Actions runs.
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - working-directory: pytailor
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,read]"
+      - working-directory: pytailor
+        run: python -m pytest tests -q

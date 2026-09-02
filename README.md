@@ -235,6 +235,21 @@ Resume content is sensitive personal data, and this build treats it that way:
 
 ## Deploying
 
+## Two ways to use this
+
+**The web app** — sign in, upload once, tailor for many jobs, refine in
+conversation, keep a library of everything you have produced. Needs a host;
+runs on Render.
+
+**`pytailor/`** — the same guards as a command-line tool. No server, no
+database, no login, so **GitHub Actions can run it**: open the Actions tab,
+paste a job posting, download the `.docx` and `.pdf` as an artifact. That is
+the only way this repository runs anything on GitHub itself, and it is why the
+CLI is written in Python. See [pytailor/README.md](pytailor/README.md).
+
+Both share the same rules — evidence on two axes, gap keywords stripped,
+retention reported — because those rules, not the interface, are the product.
+
 **GitHub Pages cannot run this app.** Pages serves static files; this is a
 Next.js app with server routes, a database, and an API key that must stay
 server-side. GitHub hosts the source — something else has to run it.

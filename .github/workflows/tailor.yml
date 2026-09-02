@@ -1,0 +1,117 @@
+name: Tailor a resume
+
+# Run from the Actions tab: paste a job posting, get a tailored .docx and .pdf
+# back as an artifact. This is the whole reason pytailor exists — GitHub cannot
+# host the web app (Pages serves static files; the app needs a process, a
+# database and a key that must stay server-side), but it can happily run a
+# command-line tool on its own machines for nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      job_description:
+        description: "The job posting. Paste the whole thing."
+        required: true
+        type: string
+      resume_path:
+        description: "Path to your resume in this repo (.txt, .pdf or .docx)"
+        required: true
+        default: "my-resume.txt"
+        type: string
+
+# Read-only. This workflow writes an artifact, never a commit.
+permissions:
+  contents: read
+
+jobs:
+  tailor:
+    runs-on: ubuntu-latest
+    # Four model calls with rate-limit waits on a free tier. Generous, but
+    # bounded, so a hung provider cannot burn the monthly Actions allowance.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Pinned rather than "3.x": a silent minor bump under a scheduled
+          # job is a bad way to discover an incompatibility.
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        working-directory: pytailor
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[read]"
+
+      - name: Check the resume exists before spending any model calls
+        run: |
+          if [ ! -f "${{ inputs.resume_path }}" ]; then
+            echo "::error::No file at '${{ inputs.resume_path }}'. Commit your resume to this repository first, then re-run and give its path."
+            exit 1
+          fi
+
+      - name: Write the job posting to a file
+        # Through the environment, not interpolated into the shell. A posting
+        # containing a quote or a backtick would otherwise break the script, or
+        # worse, run as part of it.
+        env:
+          JD: ${{ inputs.job_description }}
+        run: printf '%s' "$JD" > job-description.txt
+
+      - name: Tailor
+        working-directory: .
+        env:
+          OPENAI_COMPATIBLE_API_KEY: ${{ secrets.OPENAI_COMPATIBLE_API_KEY }}
+          # A spare on the same key, tried when the primary is rate-limited or
+          # the request is too large for its per-minute budget.
+          LLM_FALLBACKS: smaller
+          LLM_SMALLER_MODEL: openai/gpt-oss-20b
+        run: |
+          if [ -z "$OPENAI_COMPATIBLE_API_KEY" ]; then
+            echo "::error::Set OPENAI_COMPATIBLE_API_KEY as a repository secret (Settings → Secrets and variables → Actions). A free key from https://console.groq.com/keys works."
+            exit 1
+          fi
+          python -m pytailor.cli \
+            --resume "${{ inputs.resume_path }}" \
+            --jd job-description.txt \
+            --out build
+
+      - name: Summarise what it refused to write
+        if: always()
+        run: |
+          if [ -f build/report.json ]; then
+            {
+              echo "## Result"
+              echo ""
+              python - <<'PY'
+          import json, pathlib
+          r = json.loads(pathlib.Path("build/report.json").read_text(encoding="utf-8"))
+          ev, ret = r["evidence"], r.get("retention") or {}
+          print(f"**{r['role']}** — score before {r['atsScoreBefore']}, projected {r['projectedScore']}")
+          print()
+          print(f"- Evidence: {ev['rejected']} rejected of {ev['checked']} checked")
+          if ret:
+              print(f"- Retention: {ret['headline']}")
+          if r["honestGaps"]:
+              print(f"- Honest gaps (not written in): {', '.join(r['honestGaps'])}")
+          if r["gapKeywordsSurviving"]:
+              print(f"- **A gap keyword survived: {r['gapKeywordsSurviving']}** — this is a bug, please report it")
+          for f in ev["failures"][:10]:
+              print(f"  - dropped ({f['reason']}) {f['where']}: {f['claim'][:90]}")
+          PY
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: tailored-resume
+          path: |
+            build/resume.docx
+            build/resume.pdf
+            build/report.json
+          # Your resume is personal data and an artifact is downloadable by
+          # anyone with repository access. Short by default.
+          retention-days: 7
