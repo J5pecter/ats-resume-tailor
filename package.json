@@ -16,7 +16,8 @@
     "db:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
     "demo:seed": "node --conditions=react-server --import tsx scripts/seed-demo.ts",
-    "llm:check": "node --conditions=react-server --import tsx scripts/check-llm.ts"
+    "llm:check": "node --conditions=react-server --import tsx scripts/check-llm.ts",
+    "eval": "node --conditions=react-server --import tsx scripts/eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

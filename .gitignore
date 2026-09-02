@@ -62,3 +62,4 @@ prisma/*.db-journal
 
 # generated exports, local only
 /exports
+evals/.cache/

@@ -2,19 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { BadRequestError, routeError } from "@/lib/api";
 import { requireUserId } from "@/lib/auth";
-import { callStructured } from "@/lib/llm/client";
-import { tailorEnginePrompt } from "@/lib/prompts";
+import { runTailorPipeline } from "@/lib/pipeline/tailor";
 import { prisma } from "@/lib/prisma";
 import { assertWithinRateLimit } from "@/lib/rateLimit";
 import { ownedJobDescription, ownedSourceResume } from "@/lib/ownership";
 import { MatchAnalysisSchema } from "@/lib/schema/analysis";
 import type { JDProfile } from "@/lib/schema/jd";
 import type { ResumeDoc } from "@/lib/schema/resume";
-import { ResumeDocSchema } from "@/lib/schema/resume";
-import { checkEvidence, stripUnsupported } from "@/lib/validate/evidence";
-import { findForbiddenKeywords, stripForbiddenKeywords } from "@/lib/validate/keywords";
-import { sanitiseResumeDoc } from "@/lib/validate/sanitize";
-import { checkRetention } from "@/lib/validate/retention";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,48 +42,15 @@ export async function POST(req: Request) {
     const analysis = MatchAnalysisSchema.parse(cachedAnalysis.resultJson);
     const originalResume = source.parsedJson as unknown as ResumeDoc;
 
-    const { data: result } = await callStructured({
-      ...tailorEnginePrompt({
-        jdProfile,
-        analysis,
-        resume: originalResume,
-        rawResumeText: source.rawText,
-      }),
+    // Generation and every guard, in the order that matters. Shared with the
+    // evaluation harness so the two cannot measure different pipelines.
+    const outcome = await runTailorPipeline({
+      jdProfile,
+      analysis,
+      resume: originalResume,
+      rawResumeText: source.rawText,
       userId,
     });
-
-    // ── Post-generation validation (§4, §5.7) ────────────────────────────
-    // Bullets and skills whose sourceEvidence cannot be traced back to the
-    // original resume are dropped, and the rejection is surfaced rather than
-    // hidden — a claim the candidate cannot defend is worse than a gap.
-    // Normalise typographic look-alikes first. A non-breaking hyphen in
-    // "drop-off" would otherwise split the token and drag the overlap score
-    // below threshold, rejecting a bullet that is perfectly well evidenced.
-    const normalised = sanitiseResumeDoc(result.resume);
-
-    const evidence = checkEvidence(normalised, source.rawText);
-    const cleanedResume = evidence.passed
-      ? normalised
-      : stripUnsupported(normalised, evidence.failures);
-
-    // Rule 4 is absolute: keywords the gap analysis marked MISSING are honest
-    // gaps and must not appear. Detecting a violation is not enough — the
-    // document would still ship with it — so anything carrying one is removed.
-    //
-    // The evidence check cannot catch these. A model can take a real bullet
-    // with real evidence and append a clause the evidence does not support,
-    // and every traceability test still passes.
-    const { resume: guardedResume, removed: forbiddenRemoved } = stripForbiddenKeywords(
-      cleanedResume,
-      analysis,
-    );
-    const forbidden = findForbiddenKeywords(guardedResume, analysis);
-
-    // What did the rewrite leave behind? Trimming is permitted; trimming
-    // invisibly is not, because the candidate cannot restore what they cannot see.
-    const retention = checkRetention(originalResume, guardedResume);
-
-    const contentJson = ResumeDocSchema.parse(guardedResume);
 
     const row = await prisma.tailoredResume.create({
       data: {
@@ -97,9 +58,9 @@ export async function POST(req: Request) {
         jobDescriptionId,
         sourceResumeId,
         version: 1,
-        contentJson,
+        contentJson: outcome.resume,
         analysisJson: analysis,
-        changeLogJson: result.changeLog,
+        changeLogJson: outcome.changeLog,
         note: "Initial tailored draft",
       },
       select: { id: true, version: true, createdAt: true },
@@ -108,18 +69,18 @@ export async function POST(req: Request) {
     return NextResponse.json({
       tailoredResumeId: row.id,
       version: row.version,
-      resume: contentJson,
-      changeLog: result.changeLog,
+      resume: outcome.resume,
+      changeLog: outcome.changeLog,
       analysis,
-      projectedAtsScore: result.projectedAtsScore,
-      remainingGaps: result.remainingGaps,
+      projectedAtsScore: outcome.projectedAtsScore,
+      remainingGaps: outcome.remainingGaps,
       evidence: {
-        checkedBullets: evidence.checkedBullets,
-        checkedSkills: evidence.checkedSkills,
+        checkedBullets: outcome.evidence.checkedBullets,
+        checkedSkills: outcome.evidence.checkedSkills,
         // These were removed from the document that was just saved, which is
         // what distinguishes this from the re-verification done on reload.
         dropped: true,
-        issues: evidence.failures.map((f) => ({
+        issues: outcome.evidence.failures.map((f) => ({
           kind: f.kind,
           where: f.where,
           text: f.text,
@@ -127,15 +88,15 @@ export async function POST(req: Request) {
           overlap: Math.round(f.overlap * 100),
         })),
       },
-      forbiddenKeywordHits: forbidden,
-      forbiddenRemoved,
+      forbiddenKeywordHits: outcome.forbiddenHits,
+      forbiddenRemoved: outcome.forbiddenRemoved,
       retention: {
-        originalBullets: retention.originalBullets,
-        keptBullets: retention.keptBullets,
-        originalSkills: retention.originalSkills,
-        keptSkills: retention.keptSkills,
-        substantialLoss: retention.substantialLoss,
-        dropped: retention.dropped.slice(0, 30),
+        originalBullets: outcome.retention.originalBullets,
+        keptBullets: outcome.retention.keptBullets,
+        originalSkills: outcome.retention.originalSkills,
+        keptSkills: outcome.retention.keptSkills,
+        substantialLoss: outcome.retention.substantialLoss,
+        dropped: outcome.retention.dropped.slice(0, 30),
       },
     });
   } catch (err) {

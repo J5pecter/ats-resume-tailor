@@ -88,6 +88,16 @@ skills carried evidence still parse.
   error *class* is preserved — `routeError` maps it to the HTTP status, and
   flattening a 429 into a generic failure would report a recoverable pause as
   a broken app.
+- `lib/pipeline/tailor.ts` holds generation plus every guard, in order. The
+  route and the eval harness both call it, so neither can measure a pipeline
+  the other does not run — the same reason `lib/export/layout.ts` exists.
+  Order is load-bearing: sanitize before anything measures overlap, evidence
+  before keywords, retention last so it reports on what will actually ship.
+- `npm run eval` is the only way to know whether a prompt edit helped. Read
+  `evals/README.md` before trusting a number from it: `projectedAtsScore` moves
+  up to 8 points run-to-run on identical code, while forbidden hits, unrelated
+  citations, retention and schema retries do not move at all. Tune against the
+  stable ones.
 - Every data route checks session AND row ownership via `lib/ownership.ts`.
 - Never log resume or JD content. `LlmCall` stores counts and timings only.
 
@@ -105,6 +115,9 @@ npm run db:migrate   # prisma migrate dev
 npm run db:studio    # prisma studio
 npm run demo:seed -- you@example.com   # seed a tailored workspace, no model calls
 npm run llm:check    # resolve the endpoint chain, then run three prompts against it
+npm run eval         # score the tailor pipeline across the synthetic corpus
+npm run eval -- --save baseline      # record a run
+npm run eval -- --baseline baseline  # deltas against it
 RUN_LLM_E2E=1 npm run test:e2e   # include the generative steps in the E2E run
 ```
 
