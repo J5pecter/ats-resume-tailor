@@ -1,16 +1,19 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
-# Free plan, so this costs nothing to run and cannot start costing anything
-# without a deliberate change. The trade is that a free web service sleeps
-# after about fifteen minutes with no traffic, and the next visitor waits
-# roughly thirty seconds while it wakes. For a personal instance that is the
-# right side of the bargain.
+# Two services from one repository, both on the free plan:
 #
-# The database is deliberately NOT declared here. Render's own free Postgres
-# expires after a fixed term, and a resume tool quietly losing its database on
-# a timer is worse than one that is slightly more work to set up. DATABASE_URL
-# points at the existing Neon instance instead, which does not expire.
+#   web-node   the original Next.js app
+#   web-python the FastAPI rewrite
+#
+# They share the Neon database without colliding: the Python app's tables are
+# lowercase and unprefixed (users, source_resumes), the Node app's are quoted
+# and capitalised ("User", "SourceResume"). Neither sees the other's.
+#
+# Free instances sleep after about fifteen minutes idle, so the first visit
+# after a quiet spell waits roughly thirty seconds. For a personal instance
+# that is the right side of the bargain.
 services:
+
   - type: web
     name: ats-resume-tailor
     runtime: node
@@ -85,3 +88,47 @@ services:
 # AUTH_URL is deliberately absent. NextAuth infers the host, and setting it to
 # the wrong value — or to an empty string — breaks sign-in rather than fixing
 # it. That already cost an afternoon on the Vercel deployment.
+
+  - type: web
+    name: resume-tailor-python
+    runtime: docker
+    plan: free
+    region: oregon
+    # Built from the repository root: the image needs both pytailor/ and
+    # webapp/, and a context of webapp/ alone cannot see the engine.
+    dockerfilePath: ./webapp/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      # Signs the session cookie. Without it the app refuses to start on a
+      # managed host, because a missing key means either forgeable sessions or
+      # everyone logged out on every deploy.
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_COMPATIBLE_API_KEY
+        sync: false
+      # Mail for the one-time codes. Without these the app still runs and still
+      # issues codes - it prints them to the log instead of sending them, which
+      # is right on a laptop and useless in production.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      # Optional: appends a row per sign-up and sign-in. Never receives a
+      # password - there is none to send.
+      - key: SHEETS_WEBHOOK_URL
+        sync: false
+      - key: SHEETS_WEBHOOK_SECRET
+        sync: false
+      - key: OPENAI_COMPATIBLE_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_FALLBACKS
+        value: smaller
+      - key: LLM_SMALLER_MODEL
+        value: openai/gpt-oss-20b

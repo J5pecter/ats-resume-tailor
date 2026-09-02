@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="split">
+  <section class="pitch">
+    <h1>Tailor your resume to one job, honestly.</h1>
+    <p>Paste a job posting and your resume. Get back a rewritten, ATS-optimised
+       version aimed at that role — as .docx and .pdf.</p>
+    <ul class="features">
+      <li><strong>It will not invent anything.</strong> Every bullet carries the
+          fragment of your resume it came from, and that link is verified after
+          the model answers. Anything untraceable is dropped, not shipped.</li>
+      <li><strong>Honest about gaps.</strong> When the job wants something you
+          do not have, it is reported as a gap rather than papered over. You
+          should be able to defend every line in an interview.</li>
+      <li><strong>Parser-safe exports.</strong> Single column, no tables, no
+          graphics, standard headings, selectable text.</li>
+    </ul>
+    {% if mail == "console" %}
+      <p class="alert warn">This instance has no mail configured, so sign-up
+         codes are printed to the server log rather than emailed.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="tabs">
+      <button class="tab active" data-pane="login" type="button">Log in</button>
+      <button class="tab" data-pane="signup" type="button">Sign up</button>
+    </div>
+
+    <div id="pane-login" class="pane">
+      <form hx-post="/auth/login" hx-target="#login-result" hx-swap="innerHTML">
+        <label>Email<input type="email" name="email" required autocomplete="email"></label>
+        <label>Password<input type="password" name="password" autocomplete="current-password"></label>
+        <button class="primary" type="submit">Log in</button>
+      </form>
+
+      <details class="otp">
+        <summary>Or sign in with a one-time code</summary>
+        <!-- One form throughout: the code field is swapped in beside the email
+             rather than replacing it, so the code and the address submitted can
+             never describe two different people. -->
+        <form id="login-code-form">
+          <label>Email<input type="email" name="email" required></label>
+          <div id="login-code"></div>
+          <button type="button"
+                  hx-post="/auth/code"
+                  hx-vals='{"purpose": "login"}'
+                  hx-include="#login-code-form"
+                  hx-target="#login-code"
+                  hx-swap="innerHTML">Email me a code</button>
+        </form>
+      </details>
+
+      <div id="login-result"></div>
+    </div>
+
+    <div id="pane-signup" class="pane hidden">
+      <form id="signup-form">
+        <label>Full name<input name="full_name" required autocomplete="name"></label>
+        <label>Email<input type="email" name="email" required autocomplete="email"></label>
+        <label>Password
+          <input type="password" name="password" minlength="8" required
+                 autocomplete="new-password" placeholder="At least 8 characters">
+        </label>
+        <div id="signup-code"></div>
+        <button type="button"
+                hx-post="/auth/code"
+                hx-vals='{"purpose": "signup"}'
+                hx-include="#signup-form"
+                hx-target="#signup-code"
+                hx-swap="innerHTML">Email me a code</button>
+        <p class="muted small">Signup is open to anyone. The code only proves the
+           address is yours.</p>
+      </form>
+    </div>
+  </section>
+</div>
+
+<script>
+  document.querySelectorAll(".tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      var target = tab.dataset.pane;
+      document.getElementById("pane-login").classList.toggle("hidden", target !== "login");
+      document.getElementById("pane-signup").classList.toggle("hidden", target !== "signup");
+      document.querySelectorAll(".tab").forEach(function (t) { t.classList.remove("active"); });
+      tab.classList.add("active");
+    });
+  });
+</script>
+{% endblock %}

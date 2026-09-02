@@ -222,13 +222,35 @@ _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.I)
 
 
 def _parse_json(raw: str) -> dict:
-    """Parse, tolerating the fences a model adds despite being told not to."""
+    """Parse, tolerating the fences a model adds despite being told not to.
+
+    The result must be an object. A model asked for one sometimes returns a
+    top-level array instead, and letting that through crashes whatever reads a
+    key off it several frames later, as a 500 with a traceback about
+    `.get` — an error message that says nothing about what went wrong. Raising
+    here instead means the chain simply tries the next endpoint.
+    """
     text = _FENCE.sub("", raw).strip()
+
+    parsed: object
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
         # Last resort: the outermost object, for a model that prefixed prose.
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end <= start:
             raise LlmError("The model did not return JSON.") from None
-        return json.loads(text[start : end + 1])
+        try:
+            parsed = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            raise LlmError("The model did not return valid JSON.") from None
+
+    if isinstance(parsed, list):
+        # One object in a list is a near miss worth accepting; anything else is
+        # the wrong shape and retrying elsewhere is the right move.
+        if len(parsed) == 1 and isinstance(parsed[0], dict):
+            return parsed[0]
+        raise LlmError("The model returned a JSON array where an object was required.")
+    if not isinstance(parsed, dict):
+        raise LlmError(f"The model returned {type(parsed).__name__} where an object was required.")
+    return parsed

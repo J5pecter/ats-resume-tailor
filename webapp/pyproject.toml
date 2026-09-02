@@ -1,0 +1,35 @@
+[project]
+name = "resume-tailor-web"
+version = "1.0.0"
+description = "ATS resume tailor — web app. Python, server-rendered, no build step."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "jinja2>=3.1",
+  "sqlalchemy>=2.0",
+  "bcrypt>=4.1",
+  "itsdangerous>=2.2",
+  "python-multipart>=0.0.9",
+  "python-dotenv>=1.0",
+  # The tailoring engine: guards, prompts, exports. Same code the CLI runs, so
+  # the two cannot drift.
+  "pytailor",
+  "pypdf>=4.0",
+  "python-docx>=1.1",
+]
+
+[project.optional-dependencies]
+# Only needed when DATABASE_URL points at Postgres. SQLite needs nothing.
+postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -4,8 +4,26 @@
     {
       "name": "ats-resume-tailor",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "scripts\\dev.cmd"],
+      "runtimeArgs": [
+        "/c",
+        "scripts/dev.cmd"
+      ],
       "port": 3000
+    },
+    {
+      "name": "webapp",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "cwd": "webapp",
+      "port": 8000
     }
   ]
 }

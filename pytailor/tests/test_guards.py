@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import copy
 
+import pytest
+
 from pytailor.evidence import (
     RELATEDNESS_THRESHOLD,
     check_evidence,
@@ -268,3 +270,41 @@ class TestRetention:
         report = check_retention(original, tailored)
         assert any(d.kind == "role" for d in report.dropped)
         assert sum(1 for d in report.dropped if d.kind == "bullet") == report.original_bullets
+
+
+class TestJsonBoundary:
+    """The model's output is untrusted input. It gets checked like any other."""
+
+    def test_accepts_a_plain_object(self):
+        from pytailor.llm import _parse_json
+
+        assert _parse_json('{"a": 1}') == {"a": 1}
+
+    def test_strips_the_fences_a_model_adds_anyway(self):
+        from pytailor.llm import _parse_json
+
+        assert _parse_json('```json\n{"a": 1}\n```') == {"a": 1}
+
+    def test_recovers_an_object_from_surrounding_prose(self):
+        from pytailor.llm import _parse_json
+
+        assert _parse_json('Sure! Here you go:\n{"a": 1}\nHope that helps.') == {"a": 1}
+
+    def test_rejects_a_top_level_array(self):
+        # This crashed a live request with an AttributeError several frames
+        # downstream. Failing at the boundary lets the chain retry elsewhere.
+        from pytailor.llm import LlmError, _parse_json
+
+        with pytest.raises(LlmError, match="array"):
+            _parse_json('[{"a": 1}, {"b": 2}]')
+
+    def test_unwraps_a_single_object_in_a_list(self):
+        from pytailor.llm import _parse_json
+
+        assert _parse_json('[{"a": 1}]') == {"a": 1}
+
+    def test_rejects_a_bare_scalar(self):
+        from pytailor.llm import LlmError, _parse_json
+
+        with pytest.raises(LlmError):
+            _parse_json("42")

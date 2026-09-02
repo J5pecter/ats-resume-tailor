@@ -1,0 +1,51 @@
+{# What the tool refused to write, and why. This is not decoration: reading it
+   is the difference between a resume you can defend and one you cannot. #}
+<div class="report">
+  <p>
+    <strong>{{ report.role }}</strong> —
+    score before {{ report.scoreBefore }}, projected {{ report.projected }}
+  </p>
+
+  {% if report.gapKeywordsSurviving %}
+    <div class="alert error">
+      A gap keyword survived into the document: {{ report.gapKeywordsSurviving|join(", ") }}.
+      That is a bug in the guard, not a judgement call — please report it.
+    </div>
+  {% endif %}
+
+  <p class="muted small">
+    Evidence: {{ report.evidenceRejected|length }} rejected of {{ report.evidenceChecked }} checked
+  </p>
+  {% if report.evidenceRejected %}
+    <ul class="small">
+      {% for f in report.evidenceRejected[:8] %}
+        <li><code>{{ f.reason }}</code> {{ f.where }} — {{ f.claim[:90] }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if report.retention %}
+    <p class="muted small {% if report.retention.substantialLoss %}warn-text{% endif %}">
+      Retention: {{ report.retention.headline }}
+    </p>
+    {% if report.retention.dropped %}
+      <details>
+        <summary class="small">{{ report.retention.dropped|length }} item(s) left behind</summary>
+        <ul class="small">
+          {% for d in report.retention.dropped[:20] %}
+            <li>{{ d.kind }} — {{ d.text[:100] }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+  {% endif %}
+
+  {% if report.gapKeywordsRemoved %}
+    <p class="muted small">{{ report.gapKeywordsRemoved|length }} item(s) removed for using a gap keyword.</p>
+  {% endif %}
+
+  {% if report.honestGaps %}
+    <p class="muted small">Honest gaps, deliberately not written in:
+      {{ report.honestGaps|join(", ") }}</p>
+  {% endif %}
+</div>

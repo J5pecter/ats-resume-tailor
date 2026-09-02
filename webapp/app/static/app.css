@@ -1,0 +1,135 @@
+/* One stylesheet, no build step. The point of this app is the guards, not the
+   chrome, so the styling stays small enough to read in one sitting. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --ink: #16181d;
+  --muted: #5d6470;
+  --line: #e2e5ea;
+  --accent: #1d4ed8;
+  --error: #b42318;
+  --warn: #b54708;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --card: #1c1f25;
+    --ink: #e9ecf1;
+    --muted: #9aa2af;
+    --line: #2c313a;
+    --accent: #6b93ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+main { max-width: 68rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .8rem 1rem; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.topbar nav { display: flex; align-items: center; gap: .9rem; }
+.brand { font-weight: 650; text-decoration: none; color: var(--ink); }
+
+footer { max-width: 68rem; margin: 0 auto; padding: 0 1rem 2.5rem; font-size: .8rem; }
+
+h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 .6rem; }
+h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
+h3 { font-size: .95rem; margin: 0 0 .6rem; }
+
+.muted { color: var(--muted); }
+.small { font-size: .82rem; }
+.hidden { display: none; }
+.warn-text { color: var(--warn); }
+
+.split { display: grid; gap: 1.6rem; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 62rem) { .split { grid-template-columns: 1.05fr minmax(0, 25rem); } }
+
+.stack { display: grid; gap: 1.1rem; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 1.15rem;
+}
+.card.subtle { background: transparent; }
+
+.features { padding-left: 1.05rem; display: grid; gap: .65rem; }
+.features li { color: var(--muted); }
+.features strong { color: var(--ink); }
+
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem; margin-bottom: 1rem; }
+.tab {
+  padding: .5rem; border: 1px solid var(--line); background: transparent;
+  border-radius: 7px; cursor: pointer; color: var(--muted); font: inherit;
+}
+.tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+label { display: block; margin-bottom: .8rem; font-size: .87rem; font-weight: 550; }
+input, textarea, select {
+  width: 100%; margin-top: .3rem; padding: .55rem .65rem; font: inherit;
+  color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px;
+}
+textarea { resize: vertical; }
+input.code { font-size: 1.25rem; letter-spacing: .38em; }
+
+fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .9rem; margin: 0 0 1rem; }
+legend { padding: 0 .4rem; font-size: .82rem; color: var(--muted); }
+
+button, .button {
+  display: inline-block; padding: .55rem .95rem; font: inherit; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--card); color: var(--ink); text-decoration: none;
+}
+button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { border-color: var(--error); color: var(--error); }
+button.link { border: 0; background: none; color: var(--muted); padding: 0; }
+button[disabled] { opacity: .55; cursor: default; }
+
+.alert { padding: .65rem .8rem; border-radius: 8px; margin: .7rem 0; font-size: .87rem; }
+.alert.error { background: color-mix(in srgb, var(--error) 12%, transparent); color: var(--error); }
+.alert.warn  { background: color-mix(in srgb, var(--warn) 14%, transparent);  color: var(--warn); }
+.alert.info  { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+.otp { margin: .9rem 0; }
+.otp summary { cursor: pointer; font-size: .84rem; color: var(--muted); }
+
+.library { list-style: none; padding: 0; display: grid; gap: .55rem; }
+.library li {
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline;
+  padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 8px;
+}
+
+.report ul { padding-left: 1.1rem; }
+.report code { font-size: .78rem; color: var(--warn); }
+
+/* The preview mirrors the exported document: single column, standard headings,
+   nothing an ATS cannot read. */
+.preview { background: var(--card); padding: .4rem .2rem; }
+.preview h1 { font-size: 1.35rem; margin: 0; }
+.preview h2 {
+  font-size: .82rem; letter-spacing: .06em; margin: 1.1rem 0 .35rem;
+  padding-bottom: .15rem; border-bottom: 1px solid var(--line);
+}
+.preview .headline, .preview .contact { margin: .15rem 0; color: var(--muted); font-size: .87rem; }
+.preview .role { margin: .7rem 0 .2rem; display: flex; justify-content: space-between; gap: 1rem; }
+.preview .dates { color: var(--muted); font-size: .84rem; white-space: nowrap; }
+.preview ul { margin: .2rem 0; padding-left: 1.1rem; }
+.preview li { margin-bottom: .2rem; }
+
+/* HTMX shows this only while a request is in flight. Four model calls take a
+   minute, and a page that looks frozen gets refreshed and re-submitted. */
+.htmx-indicator { display: none; margin-left: .6rem; color: var(--muted); font-size: .85rem; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }

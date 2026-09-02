@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="stack">
+  <section class="card">
+    <h2>Tailor a resume</h2>
+    <form hx-post="/tailor" hx-target="#result" hx-swap="innerHTML"
+          hx-indicator="#working" enctype="multipart/form-data">
+
+      <fieldset>
+        <legend>The job</legend>
+        {% if postings %}
+          <label>Reuse a posting you have already added
+            <select name="existing_posting_id">
+              <option value="">— paste a new one below —</option>
+              {% for p in postings %}
+                <option value="{{ p.id }}">{{ p.title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        {% endif %}
+        <label>Title (optional)<input name="job_title" placeholder="Senior Product Manager — Acme"></label>
+        <label>Job posting
+          <textarea name="job_text" rows="7" placeholder="Paste the whole posting."></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Your resume</legend>
+        {% if resumes %}
+          <label>Reuse a resume you have already uploaded
+            <select name="existing_resume_id">
+              <option value="">— upload or paste a new one below —</option>
+              {% for r in resumes %}
+                <option value="{{ r.id }}">{{ r.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        {% endif %}
+        <label>Upload .pdf, .docx or .txt<input type="file" name="resume_file" accept=".pdf,.docx,.txt"></label>
+        <label>…or paste it
+          <textarea name="resume_text" rows="9"
+            placeholder="Every role, every bullet, every metric. Anything you leave out cannot be used, because it will not be invented."></textarea>
+        </label>
+      </fieldset>
+
+      <button class="primary" type="submit">Tailor it</button>
+      <span id="working" class="htmx-indicator">Working — four model calls, this takes a minute…</span>
+    </form>
+  </section>
+
+  <div id="result"></div>
+
+  <section class="card">
+    <h2>Saved work</h2>
+    {% if library %}
+      <ul class="library">
+        {% for item in library %}
+          <li>
+            <a href="/document/{{ item.row.id }}">{{ item.row.posting.title }}</a>
+            <span class="muted small">
+              {{ item.row.resume.label }} · v{{ item.row.version }}
+              {%- if item.versions > 1 %} · {{ item.versions }} versions{% endif %}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">Nothing yet. Tailor a resume and it will appear here.</p>
+    {% endif %}
+  </section>
+
+  <section class="card subtle">
+    <h3>This instance</h3>
+    <p class="muted small">Model endpoints: {{ endpoints }}</p>
+    <p class="muted small">Mail: {{ mail }}{% if mail == "console" %} — codes print to the server log{% endif %}</p>
+    <form method="post" action="/account/delete"
+          onsubmit="return confirm('Delete your account and every resume in it? This cannot be undone.')">
+      <button class="danger">Delete my data</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

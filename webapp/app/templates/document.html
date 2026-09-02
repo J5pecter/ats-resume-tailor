@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ document.posting.title }} — Resume Tailor{% endblock %}
+{% block body %}
+<div class="stack">
+  <p><a href="/dashboard" class="muted small">&larr; Back</a></p>
+
+  <section class="card">
+    <h2>{{ document.posting.title }}</h2>
+    <p class="muted small">
+      {{ document.resume.label }} · version {{ document.version }} ·
+      generated {{ document.created_at.strftime("%d %b %Y, %H:%M") }}
+    </p>
+    <p>
+      <a class="primary button" href="/document/{{ document.id }}/export.docx">Download .docx</a>
+      <a class="button" href="/document/{{ document.id }}/export.pdf">Download .pdf</a>
+    </p>
+    {% include "partials/report.html" %}
+  </section>
+
+  <section class="card">
+    <h3>Preview</h3>
+    <article class="preview">
+      <h1>{{ resume.contact.fullName }}</h1>
+      {% if resume.contact.headline %}<p class="headline">{{ resume.contact.headline }}</p>{% endif %}
+      <p class="contact">
+        {{ [resume.contact.location, resume.contact.phone, resume.contact.email]|select|join("  |  ") }}
+      </p>
+
+      {% if resume.summary %}
+        <h2>PROFESSIONAL SUMMARY</h2><p>{{ resume.summary }}</p>
+      {% endif %}
+
+      {% if resume.coreSkills %}
+        <h2>CORE SKILLS</h2>
+        {% for group in resume.coreSkills %}
+          <p><strong>{{ group.category }}:</strong>
+             {{ group.skills|map(attribute="name")|join(", ") }}</p>
+        {% endfor %}
+      {% endif %}
+
+      {% if resume.experience %}
+        <h2>PROFESSIONAL EXPERIENCE</h2>
+        {% for role in resume.experience %}
+          <p class="role"><strong>{{ role.company }} — {{ role.role }}</strong>
+             <span class="dates">{{ role.startDate }} – {{ role.endDate }}</span></p>
+          <ul>{% for b in role.bullets %}<li>{{ b.text }}</li>{% endfor %}</ul>
+        {% endfor %}
+      {% endif %}
+
+      {% if resume.education %}
+        <h2>EDUCATION</h2>
+        {% for e in resume.education %}
+          <p><strong>{{ e.institution }}</strong> {{ e.endDate }}<br>
+             <span class="muted small">{{ [e.degree, e.field]|select|join(", ") }}</span></p>
+        {% endfor %}
+      {% endif %}
+
+      {% if resume.certifications %}
+        <h2>CERTIFICATIONS</h2>
+        <p>{{ resume.certifications|map(attribute="name")|join("  •  ") }}</p>
+      {% endif %}
+    </article>
+  </section>
+
+  {% if versions|length > 1 %}
+    <section class="card subtle">
+      <h3>Versions</h3>
+      <ul class="small">
+        {% for v in versions %}
+          <li>
+            <a href="/document/{{ v.id }}">v{{ v.version }}</a>
+            <span class="muted">{{ v.created_at.strftime("%d %b, %H:%M") }} — {{ v.note }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

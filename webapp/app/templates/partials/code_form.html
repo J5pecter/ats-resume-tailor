@@ -1,0 +1,35 @@
+{# Swapped in beside the email field, never replacing it, so the code and the
+   address being submitted always belong together. #}
+{% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+{% if show_form %}
+  {% if sent %}
+    <p class="alert info">
+      {% if purpose == "signup" %}
+        We emailed a code to <strong>{{ email }}</strong>. It lasts 10 minutes.
+      {% else %}
+        If <strong>{{ email }}</strong> has an account, a code is on its way.
+        Nothing arrives for an address that does not.
+      {% endif %}
+    </p>
+  {% endif %}
+
+  <label>Code from your email
+    <input name="code" inputmode="numeric" autocomplete="one-time-code"
+           maxlength="6" required class="code" placeholder="6 digits">
+  </label>
+
+  {% if purpose == "signup" %}
+    <button class="primary" type="button"
+            hx-post="/auth/signup"
+            hx-include="#signup-form"
+            hx-target="#signup-code"
+            hx-swap="innerHTML">Confirm and create account</button>
+  {% else %}
+    <button class="primary" type="button"
+            hx-post="/auth/login"
+            hx-include="#login-code-form"
+            hx-target="#login-code"
+            hx-swap="innerHTML">Sign in</button>
+  {% endif %}
+{% endif %}

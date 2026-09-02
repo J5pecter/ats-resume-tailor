@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Resume Tailor{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <!-- HTMX from a pinned version: an unpinned CDN script is somebody else's
+       deploy running on your page. -->
+  <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Resume&nbsp;Tailor</a>
+    {% if user %}
+      <nav>
+        <span class="muted">{{ user.email }}</span>
+        <form method="post" action="/auth/logout"><button class="link">Log out</button></form>
+      </nav>
+    {% endif %}
+  </header>
+  <main>{% block body %}{% endblock %}</main>
+  <footer class="muted">
+    Your resume stays in your database. It is never logged, and you can delete
+    everything from the dashboard.
+  </footer>
+</body>
+</html>
