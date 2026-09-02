@@ -7,6 +7,8 @@
  * regression in any of them is a regression that once shipped.
  */
 
+import { VARIETY_CASES } from "./cases-variety";
+
 export interface EvalCase {
   name: string;
   /** Why this case exists. Read this before deleting one. */
@@ -26,7 +28,11 @@ export interface EvalCase {
   };
 }
 
-export const EVAL_CASES: EvalCase[] = [
+/**
+ * The five the pipeline was built against: office-professional, mostly Indian
+ * market, tidily bulleted. They test the failures that actually shipped.
+ */
+const CORE_CASES: EvalCase[] = [
   {
     name: "pm-strong-match",
     why:
@@ -238,3 +244,9 @@ SQL, Power BI, Excel, Python (basic), Statistics`,
     },
   },
 ];
+
+/**
+ * Core first so a breakage in the familiar shape shows up before the exotic
+ * ones scroll past.
+ */
+export const EVAL_CASES: EvalCase[] = [...CORE_CASES, ...VARIETY_CASES];
