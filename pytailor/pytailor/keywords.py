@@ -25,6 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from .tolerant import read
 from .sanitize import sanitise_text
 
 
@@ -68,23 +69,23 @@ def searchable_text(doc: dict[str, Any]) -> str:
     """Every surface a reader — or an ATS — will see."""
     parts: list[str] = [
         (doc.get("contact") or {}).get("headline", ""),
-        doc.get("summary", ""),
+        read(doc, "summary"),
     ]
     for group in doc.get("coreSkills") or []:
-        parts.append(group.get("category", ""))
-        parts.extend(s.get("name", "") for s in group.get("skills") or [])
+        parts.append(read(group, "category"))
+        parts.extend(read(s, "name") for s in group.get("skills") or [])
     for role in doc.get("experience") or []:
-        parts.extend([role.get("role", ""), role.get("company", ""), role.get("context") or ""])
-        parts.extend(b.get("text", "") for b in role.get("bullets") or [])
+        parts.extend([read(role, "role"), read(role, "company"), read(role, "context")])
+        parts.extend(read(b, "text") for b in role.get("bullets") or [])
     for project in doc.get("projects") or []:
-        parts.extend([project.get("name", ""), project.get("description", "")])
+        parts.extend([read(project, "name"), read(project, "description")])
         parts.extend(project.get("stack") or [])
     for edu in doc.get("education") or []:
-        parts.extend([edu.get("institution", ""), edu.get("degree", ""), edu.get("field") or ""])
+        parts.extend([read(edu, "institution"), read(edu, "degree"), read(edu, "field")])
     for cert in doc.get("certifications") or []:
-        parts.append(cert.get("name", ""))
+        parts.append(read(cert, "name"))
     for item in doc.get("additional") or []:
-        parts.extend([item.get("label", ""), item.get("value", "")])
+        parts.extend([read(item, "label"), read(item, "value")])
     return "\n".join(p for p in parts if p)
 
 
@@ -117,9 +118,9 @@ def strip_forbidden(
         where = " — ".join(x for x in (role.get("company"), role.get("role")) if x)
         kept = []
         for bullet in role.get("bullets") or []:
-            term = offending(bullet.get("text", ""))
+            term = offending(read(bullet, "text"))
             if term:
-                removed.append(ForbiddenRemoval("bullet", where, bullet.get("text", ""), term))
+                removed.append(ForbiddenRemoval("bullet", where, read(bullet, "text"), term))
             else:
                 kept.append(bullet)
         if kept:
@@ -130,10 +131,10 @@ def strip_forbidden(
     for group in doc.get("coreSkills") or []:
         kept_skills = []
         for skill in group.get("skills") or []:
-            term = offending(skill.get("name", ""))
+            term = offending(read(skill, "name"))
             if term:
                 removed.append(
-                    ForbiddenRemoval("skill", group.get("category", ""), skill.get("name", ""), term)
+                    ForbiddenRemoval("skill", read(group, "category"), read(skill, "name"), term)
                 )
             else:
                 kept_skills.append(skill)
@@ -143,10 +144,10 @@ def strip_forbidden(
 
     # The summary is one field, so a hit is edited out by clearing it rather
     # than dropping content usable elsewhere.
-    summary_term = offending(doc.get("summary", ""))
+    summary_term = offending(read(doc, "summary"))
     if summary_term:
         removed.append(
-            ForbiddenRemoval("summary", "Professional summary", doc.get("summary", ""), summary_term)
+            ForbiddenRemoval("summary", "Professional summary", read(doc, "summary"), summary_term)
         )
         out["summary"] = ""
 
@@ -156,7 +157,7 @@ def strip_forbidden(
             term = offending(f"{cert.get('name', '')} {cert.get('issuer') or ''}")
             if term:
                 removed.append(
-                    ForbiddenRemoval("certification", "Certifications", cert.get("name", ""), term)
+                    ForbiddenRemoval("certification", "Certifications", read(cert, "name"), term)
                 )
             else:
                 kept_certs.append(cert)
@@ -166,12 +167,12 @@ def strip_forbidden(
         kept_projects = []
         for project in doc["projects"]:
             blob = " ".join(
-                [project.get("name", ""), project.get("description", ""), *(project.get("stack") or [])]
+                [read(project, "name"), read(project, "description"), *(project.get("stack") or [])]
             )
             term = offending(blob)
             if term:
                 removed.append(
-                    ForbiddenRemoval("project", "Projects", project.get("name", ""), term)
+                    ForbiddenRemoval("project", "Projects", read(project, "name"), term)
                 )
             else:
                 kept_projects.append(project)
@@ -183,7 +184,7 @@ def strip_forbidden(
             term = offending(f"{item.get('label', '')} {item.get('value', '')}")
             if term:
                 removed.append(
-                    ForbiddenRemoval("additional", item.get("label", ""), item.get("value", ""), term)
+                    ForbiddenRemoval("additional", read(item, "label"), read(item, "value"), term)
                 )
             else:
                 kept_additional.append(item)

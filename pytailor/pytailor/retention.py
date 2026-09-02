@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .tolerant import read
 from .evidence import relatedness
 
 # Low bar on purpose: this asks "is this the same underlying item", not "is it
@@ -66,28 +67,28 @@ def check_retention(original: dict[str, Any], tailored: dict[str, Any]) -> Reten
     bullet_traces: list[str] = []
     for role in tailored.get("experience") or []:
         for bullet in role.get("bullets") or []:
-            bullet_traces.append(bullet.get("text", ""))
-            bullet_traces.append(bullet.get("sourceEvidence") or "")
+            bullet_traces.append(read(bullet, "text"))
+            bullet_traces.append(read(bullet, "sourceEvidence"))
 
     tailored_companies = {
-        (role.get("company") or "").strip().lower() for role in tailored.get("experience") or []
+        (read(role, "company")).strip().lower() for role in tailored.get("experience") or []
     }
 
     for role in original.get("experience") or []:
-        company = (role.get("company") or "").strip().lower()
+        company = (read(role, "company")).strip().lower()
         role_kept = company in tailored_companies
         if not role_kept:
             report.dropped.append(
                 DroppedItem(
                     "role",
-                    role.get("company", ""),
+                    read(role, "company"),
                     " at ".join(x for x in (role.get("role"), role.get("company")) if x),
                 )
             )
         where = " — ".join(x for x in (role.get("company"), role.get("role")) if x)
         for bullet in role.get("bullets") or []:
             report.original_bullets += 1
-            text = bullet.get("text", "")
+            text = read(bullet, "text")
             if not role_kept or not _survives(text, bullet_traces):
                 report.dropped.append(DroppedItem("bullet", where, text))
 
@@ -95,20 +96,20 @@ def check_retention(original: dict[str, Any], tailored: dict[str, Any]) -> Reten
     tailored_names: set[str] = set()
     for group in tailored.get("coreSkills") or []:
         for skill in group.get("skills") or []:
-            skill_traces.append(skill.get("name", ""))
-            skill_traces.append(skill.get("sourceEvidence") or "")
-            tailored_names.add((skill.get("name") or "").strip().lower())
+            skill_traces.append(read(skill, "name"))
+            skill_traces.append(read(skill, "sourceEvidence"))
+            tailored_names.add((read(skill, "name")).strip().lower())
 
     for group in original.get("coreSkills") or []:
         for skill in group.get("skills") or []:
             report.original_skills += 1
-            name = skill.get("name", "")
+            name = read(skill, "name")
             # Survives by name, or by having been relabelled into the posting's
             # vocabulary with the same work behind it.
             if name.strip().lower() in tailored_names:
                 continue
             if not _survives(name, skill_traces):
-                report.dropped.append(DroppedItem("skill", group.get("category", ""), name))
+                report.dropped.append(DroppedItem("skill", read(group, "category"), name))
 
     # Derived from `dropped` rather than measured separately, so the headline
     # figure and the list beneath it are the same measurement and cannot

@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+
+from .tolerant import read
 from typing import Any, Literal
 
 TRACEABILITY_THRESHOLD = 0.70
@@ -119,8 +121,8 @@ def check_evidence(doc: dict[str, Any], raw_source_text: str) -> EvidenceReport:
         where = " — ".join(x for x in (role.get("company"), role.get("role")) if x)
         for bullet in role.get("bullets") or []:
             report.checked_bullets += 1
-            text = bullet.get("text", "")
-            evidence = (bullet.get("sourceEvidence") or "").strip()
+            text = read(bullet, "text")
+            evidence = read(bullet, "sourceEvidence").strip()
 
             if not evidence:
                 report.failures.append(
@@ -145,8 +147,8 @@ def check_evidence(doc: dict[str, Any], raw_source_text: str) -> EvidenceReport:
         where = f"Core skills · {group.get('category', '')}"
         for skill in group.get("skills") or []:
             report.checked_skills += 1
-            name = skill.get("name", "")
-            evidence = (skill.get("sourceEvidence") or "").strip()
+            name = read(skill, "name")
+            evidence = read(skill, "sourceEvidence").strip()
 
             # A skill passes by either route. Relabelling a real skill into the
             # posting's vocabulary is explicitly allowed, so a name-only check

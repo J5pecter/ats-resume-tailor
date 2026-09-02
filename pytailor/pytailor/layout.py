@@ -9,6 +9,8 @@ apart within a week and nobody notices until an employer sees one of them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from .tolerant import read
+
 from typing import Any, Literal
 
 BlockKind = Literal[
@@ -144,8 +146,8 @@ def build_blocks(doc: dict[str, Any]) -> list[Block]:
 
     # The contact block sits in the body, never a header or footer: ATS parsers
     # frequently skip those entirely.
-    blocks.append(Block("name", text=contact.get("fullName", "")))
-    if (contact.get("headline") or "").strip():
+    blocks.append(Block("name", text=read(contact, "fullName")))
+    if (read(contact, "headline")).strip():
         blocks.append(Block("headline", text=contact["headline"].strip()))
 
     line = "  |  ".join(
@@ -169,9 +171,9 @@ def build_blocks(doc: dict[str, Any]) -> list[Block]:
     if doc.get("coreSkills"):
         blocks.append(Block("section", text=HEADINGS["skills"]))
         for group in doc["coreSkills"]:
-            names = ", ".join(s.get("name", "").strip() for s in group.get("skills") or [] if s.get("name"))
+            names = ", ".join(read(s, "name").strip() for s in group.get("skills") or [] if s.get("name"))
             if names:
-                blocks.append(Block("skills", label=group.get("category", ""), text=names))
+                blocks.append(Block("skills", label=read(group, "category"), text=names))
 
     if doc.get("experience"):
         blocks.append(Block("section", text=HEADINGS["experience"]))
@@ -180,22 +182,22 @@ def build_blocks(doc: dict[str, Any]) -> list[Block]:
                 Block(
                     "role_header",
                     left=" — ".join(x for x in (role.get("company"), role.get("role")) if x),
-                    right=format_date_range(role.get("startDate", ""), role.get("endDate", "")),
+                    right=format_date_range(read(role, "startDate"), read(role, "endDate")),
                 )
             )
             meta = "  |  ".join(x.strip() for x in (role.get("location"), role.get("context")) if x and x.strip())
             if meta:
                 blocks.append(Block("role_meta", text=meta))
             for bullet in role.get("bullets") or []:
-                if (bullet.get("text") or "").strip():
+                if (read(bullet, "text")).strip():
                     blocks.append(Block("bullet", text=bullet["text"].strip()))
 
     if doc.get("projects"):
         blocks.append(Block("section", text=HEADINGS["projects"]))
         for project in doc["projects"]:
-            blocks.append(Block("role_header", left=project.get("name", ""), right=(project.get("link") or "").strip()))
+            blocks.append(Block("role_header", left=read(project, "name"), right=(read(project, "link")).strip()))
             stack = ", ".join(project.get("stack") or [])
-            detail = " ".join(x for x in (project.get("description", ""), f"Stack: {stack}" if stack else "") if x).strip()
+            detail = " ".join(x for x in (read(project, "description"), f"Stack: {stack}" if stack else "") if x).strip()
             if detail:
                 blocks.append(Block("bullet", text=detail))
 
@@ -204,7 +206,7 @@ def build_blocks(doc: dict[str, Any]) -> list[Block]:
         for edu in doc["education"]:
             # Institution on the bold line: it is the anchor a human scans for
             # and the token an ATS matches, so it should not be demoted.
-            blocks.append(Block("role_header", left=edu.get("institution", ""), right=edu.get("endDate", "")))
+            blocks.append(Block("role_header", left=read(edu, "institution"), right=read(edu, "endDate")))
             detail = "  |  ".join(
                 x for x in (
                     ", ".join(y for y in (edu.get("degree"), edu.get("field")) if y),
@@ -222,14 +224,14 @@ def build_blocks(doc: dict[str, Any]) -> list[Block]:
         certs = []
         for cert in doc["certifications"]:
             detail = ", ".join(x for x in (cert.get("issuer"), cert.get("date")) if x)
-            certs.append(f"{cert.get('name', '')} ({detail})" if detail else cert.get("name", ""))
+            certs.append(f"{cert.get('name', '')} ({detail})" if detail else read(cert, "name"))
         if certs:
             blocks.append(Block("paragraph", text="  •  ".join(c for c in certs if c)))
 
     if doc.get("additional"):
         blocks.append(Block("section", text=HEADINGS["additional"]))
         for item in doc["additional"]:
-            if (item.get("value") or "").strip():
-                blocks.append(Block("labelled", label=item.get("label", ""), text=item["value"].strip()))
+            if (read(item, "value")).strip():
+                blocks.append(Block("labelled", label=read(item, "label"), text=item["value"].strip()))
 
     return blocks

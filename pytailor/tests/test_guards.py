@@ -308,3 +308,67 @@ class TestJsonBoundary:
 
         with pytest.raises(LlmError):
             _parse_json("42")
+
+
+class TestNullTolerance:
+    """Models write null where a string was asked for. Constantly.
+
+    `d.get("name", "")` looks safe and is not: the default applies only when the
+    key is ABSENT, so an explicit null comes straight through. A run on a real
+    CV died on exactly this — the model wrote {"name": null} in a projects
+    entry, and the guard about to strip a fabricated project crashed instead of
+    stripping it. A safety check failing open is the worst direction available.
+    """
+
+    def _nulled(self):
+        return {
+            "contact": {"fullName": "X", "headline": None},
+            "summary": None,
+            "coreSkills": [{"category": None, "skills": [{"name": None, "sourceEvidence": None}]}],
+            "experience": [
+                {
+                    "company": "Acme",
+                    "role": None,
+                    "context": None,
+                    "bullets": [{"text": None, "sourceEvidence": None}],
+                }
+            ],
+            "projects": [{"name": None, "description": None, "stack": None}],
+            "education": [{"institution": None, "degree": None, "field": None}],
+            "certifications": [{"name": None, "issuer": None}],
+            "additional": [{"label": None, "value": None}],
+        }
+
+    def test_stripping_survives_nulls_everywhere(self):
+        # This is the exact crash: TypeError on joining a None.
+        cleaned, removed = strip_forbidden(self._nulled(), ["Kubernetes"], "source text")
+        assert isinstance(cleaned, dict)
+        assert removed == []
+
+    def test_finding_survives_nulls(self):
+        assert find_forbidden(self._nulled(), ["Kubernetes"], "source text") == []
+
+    def test_evidence_survives_nulls(self):
+        report = check_evidence(self._nulled(), "source text")
+        # A null bullet has no evidence, so it fails — but it fails as a
+        # verdict rather than as a traceback.
+        assert report.checked > 0
+
+    def test_retention_survives_nulls(self):
+        report = check_retention(self._nulled(), self._nulled())
+        assert report.original_bullets >= 0
+
+    def test_layout_survives_nulls(self):
+        from pytailor.layout import build_blocks
+
+        blocks = build_blocks(self._nulled())
+        assert all(isinstance(b.text, str) for b in blocks)
+
+    def test_a_number_where_a_string_was_asked_for(self):
+        from pytailor.tolerant import read
+
+        # Years and scores come back as numbers often enough to matter.
+        assert read({"endDate": 2024}, "endDate") == "2024"
+        assert read({"name": None}, "name") == ""
+        assert read(None, "name") == ""
+        assert read("not a dict", "name") == ""
