@@ -9,10 +9,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { DualInput } from "@/components/shared/DualInput";
 import { GapAnalysisPanel } from "@/components/resume/GapAnalysisPanel";
 import { ResumePreview } from "@/components/resume/ResumePreview";
-import { ApiError, postJson } from "@/lib/client/api";
+import { ApiError, getJson, postJson } from "@/lib/client/api";
+import { SavedPicker } from "./SavedPicker";
 import type { MatchAnalysis } from "@/lib/schema/analysis";
 import type { ResumeDoc } from "@/lib/schema/resume";
 import type { ChangeLogEntry } from "@/lib/schema/tailor";
+
+/** The row shape GET /api/resume returns: labels only, no parsed document. */
+interface SavedResume {
+  id: string;
+  label: string;
+  createdAt: string;
+}
 
 export interface ResumeState {
   id: string;
@@ -111,6 +119,36 @@ export function ResumeTab({
       onAnalysed(result.analysis);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not read that resume.");
+    } finally {
+      setParsing(false);
+      setAnalysing(false);
+    }
+  }
+
+  /**
+   * Reuse a CV already on file: skip the upload and the parse, but still run
+   * the gap analysis, because that is scored against THIS job description and
+   * a cached one from another posting would be meaningless here.
+   */
+  async function openSaved(id: string, label: string) {
+    if (!jdId) return;
+    setParsing(true);
+    setError(null);
+    try {
+      const stored = await getJson<{ id: string; label: string; resume: ResumeDoc }>(
+        `/api/resume/${id}`,
+      );
+      onParsed({ id: stored.id, label: stored.label || label, doc: stored.resume });
+
+      setParsing(false);
+      setAnalysing(true);
+      const result = await postJson<{ analysis: MatchAnalysis }>("/api/analyze", {
+        jobDescriptionId: jdId,
+        sourceResumeId: stored.id,
+      });
+      onAnalysed(result.analysis);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "That resume could not be opened.");
     } finally {
       setParsing(false);
       setAnalysing(false);
@@ -227,6 +265,23 @@ export function ResumeTab({
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? <Alert tone="error">{error}</Alert> : null}
+
+        {/* A CV changes far less often than the jobs applied for, so reusing
+            one is the common case rather than the exception. */}
+        <SavedPicker<null>
+          title="Resumes you have already uploaded"
+          endpoint="/api/resume"
+          busy={parsing || analysing}
+          extract={(payload) =>
+            ((payload as { resumes?: SavedResume[] }).resumes ?? []).map((row) => ({
+              id: row.id,
+              label: row.label || "Resume",
+              createdAt: row.createdAt,
+              value: null,
+            }))
+          }
+          onPick={(item) => void openSaved(item.id, item.label)}
+        />
 
         <DualInput
           label="your resume"

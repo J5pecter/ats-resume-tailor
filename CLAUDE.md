@@ -110,6 +110,12 @@ skills carried evidence still parse.
   up to 8 points run-to-run on identical code, while forbidden hits, unrelated
   citations, retention and schema retries do not move at all. Tune against the
   stable ones.
+- `GET /api/tailored` lists lineages, not rows. A refinement, a manual edit and
+  a rollback all write version+1 into the same `(jobDescriptionId,
+  sourceResumeId)` pair, so listing rows shows one job four times. Grouping is
+  done in JS rather than with Prisma's `distinct`, which is pushed to the
+  database on some connectors and applied in memory on others — a library that
+  behaves differently on SQLite and Postgres is a bug waiting for a deploy.
 - Every data route checks session AND row ownership via `lib/ownership.ts`.
 - Never log resume or JD content. `LlmCall` stores counts and timings only.
 

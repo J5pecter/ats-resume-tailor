@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { DualInput } from "@/components/shared/DualInput";
 import { JdProfileSummary } from "@/components/resume/JdProfileSummary";
+import { SavedPicker } from "./SavedPicker";
 import { ApiError, patchJson, postJson } from "@/lib/client/api";
 import type { JDProfile } from "@/lib/schema/jd";
 
@@ -17,6 +18,14 @@ export interface JdState {
   id: string;
   title: string;
   profile: JDProfile;
+}
+
+/** The row shape GET /api/jd returns. */
+interface SavedJd {
+  id: string;
+  title: string;
+  createdAt: string;
+  parsedJson: JDProfile;
 }
 
 export function JobDescriptionTab({
@@ -134,6 +143,26 @@ export function JobDescriptionTab({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Reusing a posting costs no model call — it is already parsed. */}
+        <SavedPicker<JDProfile>
+          title="Job descriptions you have already added"
+          endpoint="/api/jd"
+          busy={busy}
+          // This branch only renders when nothing is loaded, so there is
+          // nothing to exclude.
+          extract={(payload) =>
+            ((payload as { jobDescriptions?: SavedJd[] }).jobDescriptions ?? []).map((row) => ({
+              id: row.id,
+              label: row.title || "Untitled role",
+              createdAt: row.createdAt,
+              value: row.parsedJson,
+            }))
+          }
+          onPick={(item) =>
+            onParsed({ id: item.id, title: item.label, profile: item.value })
+          }
+        />
+
         {!llmReady ? (
           <Alert tone="warning" title="No model key configured">
             Parsing needs an API key. See the setup note at the top of the page.

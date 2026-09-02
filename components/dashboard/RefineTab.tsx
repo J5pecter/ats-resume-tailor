@@ -107,10 +107,10 @@ export function RefineTab({
     <Alert tone="info" title="Reopened from your last session">
       This is the version generated on{" "}
       <strong>{formatGeneratedAt(outcome.restored.generatedAt)}</strong>, not a new
-      one. The dashboard reopens your last result so a refresh cannot lose it.
-      To produce a fresh version, go back to <strong>Resume</strong> and press{" "}
-      <strong>Generate tailored resume</strong> — or refine this one below, which
-      also saves a new version.
+      one — reopened either because you came back to it or because you picked it
+      from <strong>Saved work</strong>. To produce a fresh version, go back to{" "}
+      <strong>Resume</strong> and press <strong>Generate tailored resume</strong> —
+      or refine this one below, which also saves a new version.
     </Alert>
   ) : null;
 
