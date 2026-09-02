@@ -61,6 +61,18 @@ skills carried evidence still parse.
   rollbacks all create version+1.
 - Refinement output is diffed field-by-field against the input
   (`lib/validate/drift.ts`). Undeclared changes are rejected, not trusted.
+- A MISSING keyword that appears verbatim in the source resume is exempt from
+  rule 4. The list comes from a model and the model can be wrong: the eval
+  corpus caught "18th Edition" reported as a gap for an electrician whose CV
+  reads "City and Guilds 2382 18th Edition, 2019". Enforced literally, rule 4
+  deletes a real qualification off the candidate's own resume, which inverts
+  the point of the rule. Same dual logic as `SkillSchema`. Both
+  `findForbiddenKeywords` and `stripForbiddenKeywords` take the source text so
+  they cannot disagree about what counts.
+- The keyword stripper covers every surface the finder searches — bullets,
+  skills, summary, certifications, projects, additional. It previously read
+  certifications and could not clean them, so a hit there was reported on every
+  check and never actionable.
 - `lib/validate/sanitize.ts` runs on every write path, BEFORE the evidence
   check. Models emit non-breaking hyphens and curly quotes despite ATS rule 14;
   those break both the ATS's literal keyword matching and our own tokeniser.

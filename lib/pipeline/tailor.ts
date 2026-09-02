@@ -11,6 +11,7 @@ import {
   findForbiddenKeywords,
   stripForbiddenKeywords,
   type ForbiddenHit,
+  type ForbiddenRemoval,
 } from "@/lib/validate/keywords";
 import { checkRetention, type RetentionReport } from "@/lib/validate/retention";
 import { sanitiseResumeDoc } from "@/lib/validate/sanitize";
@@ -59,7 +60,7 @@ export interface TailorPipelineResult {
   evidence: EvidenceCheckResult;
   /** Should always be empty: a hit here means a gap keyword survived stripping. */
   forbiddenHits: ForbiddenHit[];
-  forbiddenRemoved: { kind: "bullet" | "skill"; where: string; text: string; term: string }[];
+  forbiddenRemoved: ForbiddenRemoval[];
   retention: RetentionReport;
   meta: {
     provider: string;
@@ -90,11 +91,15 @@ export async function runTailorPipeline(
   const evidence = checkEvidence(normalised, input.rawResumeText);
   const cleaned = evidence.passed ? normalised : stripUnsupported(normalised, evidence.failures);
 
+  // The raw source goes in so a term the candidate demonstrably has is not
+  // treated as a gap. Without it the guard would delete real credentials
+  // whenever the gap analysis misclassified one.
   const { resume: guarded, removed: forbiddenRemoved } = stripForbiddenKeywords(
     cleaned,
     input.analysis,
+    input.rawResumeText,
   );
-  const forbiddenHits = findForbiddenKeywords(guarded, input.analysis);
+  const forbiddenHits = findForbiddenKeywords(guarded, input.analysis, input.rawResumeText);
 
   const retention = checkRetention(input.resume, guarded);
 

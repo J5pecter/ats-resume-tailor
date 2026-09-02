@@ -105,9 +105,7 @@ describe("prompt builders", () => {
       }),
       refineEnginePrompt({
         jdProfile: JD,
-        analysis: ANALYSIS,
-        resume: SAMPLE_RESUME,
-        rawResumeText: "raw text",
+        current: SAMPLE_RESUME,
         instruction: "Make the summary shorter.",
       }),
     ];
@@ -154,13 +152,7 @@ describe("prompt builders", () => {
 
   it("puts the user's instruction in the refine prompt verbatim", () => {
     const instruction = "Drop the second bullet at Paylane and lengthen the summary.";
-    const p = refineEnginePrompt({
-      jdProfile: JD,
-      analysis: ANALYSIS,
-      resume: SAMPLE_RESUME,
-      rawResumeText: "raw",
-      instruction,
-    });
+    const p = refineEnginePrompt({ jdProfile: JD, current: SAMPLE_RESUME, instruction });
     expect(`${p.system}\n${p.user}`).toContain(instruction);
   });
 
@@ -172,13 +164,7 @@ describe("prompt builders", () => {
         resume: SAMPLE_RESUME,
         rawResumeText: "raw",
       }),
-      refineEnginePrompt({
-        jdProfile: JD,
-        analysis: ANALYSIS,
-        resume: SAMPLE_RESUME,
-        rawResumeText: "raw",
-        instruction: "shorter",
-      }),
+      refineEnginePrompt({ jdProfile: JD, current: SAMPLE_RESUME, instruction: "shorter" }),
     ];
     for (const p of generative) {
       expect(p.system, p.promptName).toMatch(/sourceEvidence/);

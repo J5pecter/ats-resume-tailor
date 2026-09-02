@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findForbiddenKeywords, resumeToSearchableText } from "@/lib/validate/keywords";
-import { MatchAnalysisSchema } from "@/lib/schema/analysis";
+import {
+  findForbiddenKeywords,
+  resumeToSearchableText,
+  stripForbiddenKeywords,
+} from "@/lib/validate/keywords";
+import { MatchAnalysisSchema, type MatchAnalysis } from "@/lib/schema/analysis";
 import { SAMPLE_RESUME } from "../fixtures/resume";
 import type { ResumeDoc } from "@/lib/schema/resume";
 
@@ -100,5 +104,81 @@ describe("stripping claims that smuggled a gap keyword", () => {
     const { resume, removed } = stripForbiddenKeywords(SAMPLE_RESUME, analysis);
     expect(removed).toHaveLength(0);
     expect(resume).toEqual(SAMPLE_RESUME);
+  });
+});
+
+/**
+ * The MISSING list comes from a model, and the evaluation corpus caught it
+ * being wrong: an electrician whose resume reads "City and Guilds 2382 18th
+ * Edition, 2019" had "18th Edition" reported as a gap. Enforced literally,
+ * rule 4 would delete a real qualification off the candidate's own resume.
+ */
+describe("a gap the candidate does not actually have", () => {
+  const ANALYSIS = {
+    atsScore: 50,
+    matched: [],
+    partial: [],
+    missing: [
+      { term: "18th Edition", importance: "high" },
+      { term: "PLC fault-finding", importance: "high" },
+    ],
+    recommendations: [],
+  } as unknown as MatchAnalysis;
+
+  const SOURCE = `Wayne Prosser
+QUALIFICATIONS
+City and Guilds 2382 18th Edition, 2019
+NVQ Level 3 Electrical Installation, 2018`;
+
+  function resumeWith(skill: string, cert: string): ResumeDoc {
+    const base = structuredClone(SAMPLE_RESUME);
+    base.coreSkills[0].skills.push({ name: skill, sourceEvidence: "City and Guilds 2382" });
+    base.certifications = [{ name: cert, issuer: "City and Guilds", date: "2019" }];
+    return base;
+  }
+
+  it("does not strip a term printed on the candidate's own resume", () => {
+    const doc = resumeWith("18th Edition", "City and Guilds 2382 18th Edition");
+    const { resume, removed } = stripForbiddenKeywords(doc, ANALYSIS, SOURCE);
+
+    expect(removed).toHaveLength(0);
+    expect(resume.coreSkills.flatMap((g) => g.skills.map((s) => s.name))).toContain("18th Edition");
+    expect(resume.certifications?.map((c) => c.name)).toContain(
+      "City and Guilds 2382 18th Edition",
+    );
+  });
+
+  it("does not report it as a violation either, so the two agree", () => {
+    const doc = resumeWith("18th Edition", "City and Guilds 2382 18th Edition");
+    expect(findForbiddenKeywords(doc, ANALYSIS, SOURCE)).toHaveLength(0);
+  });
+
+  it("still strips a term that is genuinely absent from the source", () => {
+    const doc = resumeWith("PLC fault-finding", "PLC Programming Level 2");
+    const { resume, removed } = stripForbiddenKeywords(doc, ANALYSIS, SOURCE);
+
+    expect(removed.map((r) => r.term)).toContain("PLC fault-finding");
+    expect(resume.coreSkills.flatMap((g) => g.skills.map((s) => s.name))).not.toContain(
+      "PLC fault-finding",
+    );
+  });
+
+  it("strips an invented certification, which used to be unreachable", () => {
+    // Certifications were searched by the finder but not by the stripper, so a
+    // hit there was reported on every check and could never be acted on.
+    const doc = resumeWith("Fault finding", "PLC fault-finding Level 3");
+    const { resume, removed } = stripForbiddenKeywords(doc, ANALYSIS, SOURCE);
+
+    expect(removed.map((r) => r.kind)).toContain("certification");
+    expect(resume.certifications ?? []).toHaveLength(0);
+    expect(findForbiddenKeywords(resume, ANALYSIS, SOURCE)).toHaveLength(0);
+  });
+
+  it("enforces every term when no source text is given", () => {
+    // The conservative direction: without the source nothing can be exempted,
+    // so behaviour matches what it was before the exemption existed.
+    const doc = resumeWith("18th Edition", "City and Guilds 2382 18th Edition");
+    const { removed } = stripForbiddenKeywords(doc, ANALYSIS);
+    expect(removed.length).toBeGreaterThan(0);
   });
 });
